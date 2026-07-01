@@ -1,17 +1,17 @@
 name: Deploy to Cloud Run
 
-# Disparo manual apenas — nunca em push. Este workflow depende de um projeto GCP
-# com Cloud Run + Artifact Registry habilitados e dos secrets abaixo configurados
-# em Settings > Secrets and variables > Actions. Nenhum deles existe ainda
-# (ver docs/decisions.md, entrada 2026-07-01). Até lá, rodar isso falha na
-# etapa de autenticação — de propósito, para não mascarar a pendência.
+# Disparo manual apenas — nunca em push.
 #
-# Secrets esperados:
-#   GCP_PROJECT_ID
-#   GCP_REGION
-#   GCP_WORKLOAD_IDENTITY_PROVIDER
-#   GCP_SERVICE_ACCOUNT
-#   GCP_ARTIFACT_REPO
+# Secrets do GitHub Actions (Settings > Secrets and variables > Actions):
+#   GCP_PROJECT_ID, GCP_REGION, GCP_WORKLOAD_IDENTITY_PROVIDER,
+#   GCP_SERVICE_ACCOUNT, GCP_ARTIFACT_REPO
+# Configurados em 2026-07-01 — ver docs/decisions.md para os nomes de
+# service accounts, pool/provider WIF e secrets do Secret Manager.
+#
+# As flags específicas do `api` (Cloud SQL, secrets, env vars) ficam isoladas
+# no passo abaixo porque o `web` ainda não foi hospedado nesta fatia — ao
+# adicionar o deploy do `web`, criar os equivalentes dele (Secret Manager,
+# runtime SA, etc.) antes de estender este `if`.
 
 on:
   workflow_dispatch:
@@ -53,9 +53,22 @@ jobs:
       - name: Deploy no Cloud Run
         run: |
           IMAGE="${{ secrets.GCP_REGION }}-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/${{ secrets.GCP_ARTIFACT_REPO }}/${{ inputs.app }}:${{ github.sha }}"
+
+          EXTRA_FLAGS=()
+          if [ "${{ inputs.app }}" = "api" ]; then
+            EXTRA_FLAGS+=(
+              --service-account fluxowork-api-runtime@${{ secrets.GCP_PROJECT_ID }}.iam.gserviceaccount.com
+              --add-cloudsql-instances "${{ secrets.GCP_PROJECT_ID }}:${{ secrets.GCP_REGION }}:fluxowork-dev"
+              --set-secrets "DATABASE_URL=fluxowork-api-database-url:latest,JWT_ACCESS_SECRET=fluxowork-api-jwt-secret:latest"
+              --set-env-vars "NODE_ENV=production,JWT_ACCESS_TTL=15m,REFRESH_TOKEN_TTL_DAYS=30,GOOGLE_OAUTH_CLIENT_ID=placeholder-client-id.apps.googleusercontent.com,GOOGLE_OAUTH_CLIENT_SECRET=placeholder-client-secret,GOOGLE_OAUTH_CALLBACK_URL=https://placeholder/auth/google/callback"
+            )
+          fi
+
           gcloud run deploy fluxowork-${{ inputs.app }} \
             --image "$IMAGE" \
             --region "${{ secrets.GCP_REGION }}" \
             --project "${{ secrets.GCP_PROJECT_ID }}" \
             --platform managed \
+            --allow-unauthenticated \
+            "${EXTRA_FLAGS[@]}" \
             --quiet
