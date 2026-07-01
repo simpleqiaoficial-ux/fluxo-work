@@ -32,7 +32,7 @@ Monorepo pnpm workspaces (`pnpm-workspace.yaml`, `apps/*`).
 - `apps/web` — React + Vite + TypeScript. Lint via `oxlint`. Roteamento com `react-router`. Testes com Vitest + Testing Library.
 - `docs/` — `spec.md` (especificação de domínio) e `decisions.md` (ADR curto).
 - `.github/workflows/ci.yml` — lint, typecheck, test, build nos dois apps.
-- `.github/workflows/deploy.yml` — deploy para Cloud Run, disparo manual (`workflow_dispatch`); **não funcional ainda**, pendente de projeto GCP e secrets.
+- `.github/workflows/deploy.yml` — deploy para Cloud Run, disparo manual (`workflow_dispatch`). `apps/api` **já está hospedada** (Workload Identity Federation, Secret Manager, service accounts dedicadas — ver `docs/decisions.md`). `apps/web` ainda não.
 
 Comandos principais (raiz do monorepo):
 
