@@ -1,0 +1,61 @@
+name: Deploy to Cloud Run
+
+# Disparo manual apenas — nunca em push. Este workflow depende de um projeto GCP
+# com Cloud Run + Artifact Registry habilitados e dos secrets abaixo configurados
+# em Settings > Secrets and variables > Actions. Nenhum deles existe ainda
+# (ver docs/decisions.md, entrada 2026-07-01). Até lá, rodar isso falha na
+# etapa de autenticação — de propósito, para não mascarar a pendência.
+#
+# Secrets esperados:
+#   GCP_PROJECT_ID
+#   GCP_REGION
+#   GCP_WORKLOAD_IDENTITY_PROVIDER
+#   GCP_SERVICE_ACCOUNT
+#   GCP_ARTIFACT_REPO
+
+on:
+  workflow_dispatch:
+    inputs:
+      app:
+        description: 'App a deployar'
+        required: true
+        type: choice
+        options: [api, web]
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  deploy:
+    name: Build & deploy ${{ inputs.app }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Auth no Google Cloud (Workload Identity Federation)
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
+
+      - uses: google-github-actions/setup-gcloud@v2
+
+      - name: Configura Docker para o Artifact Registry
+        run: gcloud auth configure-docker ${{ secrets.GCP_REGION }}-docker.pkg.dev --quiet
+
+      - name: Build & push da imagem
+        run: |
+          IMAGE="${{ secrets.GCP_REGION }}-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/${{ secrets.GCP_ARTIFACT_REPO }}/${{ inputs.app }}:${{ github.sha }}"
+          docker build -f apps/${{ inputs.app }}/Dockerfile -t "$IMAGE" .
+          docker push "$IMAGE"
+
+      - name: Deploy no Cloud Run
+        run: |
+          IMAGE="${{ secrets.GCP_REGION }}-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/${{ secrets.GCP_ARTIFACT_REPO }}/${{ inputs.app }}:${{ github.sha }}"
+          gcloud run deploy fluxowork-${{ inputs.app }} \
+            --image "$IMAGE" \
+            --region "${{ secrets.GCP_REGION }}" \
+            --project "${{ secrets.GCP_PROJECT_ID }}" \
+            --platform managed \
+            --quiet

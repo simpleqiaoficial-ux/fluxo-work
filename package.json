@@ -1,0 +1,35 @@
+{
+  "name": "fluxo-work",
+  "private": true,
+  "version": "0.0.0",
+  "engines": {
+    "node": ">=22.0.0"
+  },
+  "packageManager": "pnpm@11.9.0",
+  "scripts": {
+    "dev:api": "pnpm --filter api start:dev",
+    "dev:web": "pnpm --filter web dev",
+    "build": "pnpm -r build",
+    "lint": "pnpm -r lint",
+    "test": "pnpm -r test",
+    "typecheck": "pnpm -r typecheck",
+    "format": "prettier --write \"**/*.{ts,tsx,js,jsx,json,md,yml,yaml}\" --ignore-path .gitignore",
+    "prepare": "husky"
+  },
+  "devDependencies": {
+    "husky": "^9.1.7",
+    "lint-staged": "^15.5.0",
+    "prettier": "^3.4.2"
+  },
+  "lint-staged": {
+    "apps/api/**/*.ts": [
+      "pnpm --filter api exec eslint --fix"
+    ],
+    "apps/web/**/*.{ts,tsx}": [
+      "pnpm --filter web exec oxlint"
+    ],
+    "*.{json,md,yml,yaml}": [
+      "prettier --write"
+    ]
+  }
+}
