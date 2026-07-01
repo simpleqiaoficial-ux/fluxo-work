@@ -21,4 +21,4 @@ COPY --from=build /repo/apps/api/dist ./apps/api/dist
 ENV PORT=8080
 EXPOSE 8080
 WORKDIR /repo/apps/api
-CMD ["node", "dist/main.js"]
+CMD ["node", "dist/src/main.js"]
