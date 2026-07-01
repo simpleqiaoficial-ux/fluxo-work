@@ -1,7 +1,11 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { LoggerModule } from 'nestjs-pino';
+import { AuditModule } from './audit/audit.module';
+import { AuthModule } from './auth/auth.module';
+import { CompaniesModule } from './companies/companies.module';
 import { HealthModule } from './health/health.module';
+import { PrismaModule } from './prisma/prisma.module';
 
 @Module({
   imports: [
@@ -15,6 +19,10 @@ import { HealthModule } from './health/health.module';
             : { target: 'pino-pretty', options: { singleLine: true } },
       },
     }),
+    PrismaModule,
+    AuditModule,
+    AuthModule,
+    CompaniesModule,
     HealthModule,
   ],
 })

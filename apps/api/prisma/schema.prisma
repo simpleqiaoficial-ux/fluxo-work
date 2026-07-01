@@ -1,13 +1,117 @@
 // This is your Prisma schema file,
 // learn more about it in the docs: https://pris.ly/d/prisma-schema
 
-// Get a free hosted Postgres database in seconds: `npx create-db`
-
 generator client {
-  provider = "prisma-client"
-  output   = "../generated/prisma"
+  provider = "prisma-client-js"
 }
 
 datasource db {
   provider = "postgresql"
+}
+
+enum Role {
+  ADMIN
+  SUPERVISOR
+  GERENTE
+  FINANCEIRO
+  PRESTADOR
+}
+
+enum MembershipStatus {
+  INVITED
+  ACTIVE
+  REVOKED
+}
+
+model Company {
+  id        String   @id @default(cuid())
+  legalName String
+  tradeName String?
+  cnpj      String   @unique
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  memberships Membership[]
+  auditLogs   AuditLog[]
+
+  @@map("companies")
+}
+
+model User {
+  id        String   @id @default(cuid())
+  googleId  String   @unique
+  email     String   @unique
+  name      String
+  avatarUrl String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  memberships   Membership[]
+  refreshTokens RefreshToken[]
+  auditLogs     AuditLog[]     @relation("AuditActor")
+
+  @@map("users")
+}
+
+// Vínculo entre um Usuário e uma Empresa, com o papel exercido nela.
+// Um usuário pode ter vínculos com várias empresas (relação global de identidade).
+model Membership {
+  id         String           @id @default(cuid())
+  userId     String
+  companyId  String
+  role       Role
+  status     MembershipStatus @default(INVITED)
+  invitedAt  DateTime         @default(now())
+  acceptedAt DateTime?
+  revokedAt  DateTime?
+  createdAt  DateTime         @default(now())
+  updatedAt  DateTime         @updatedAt
+
+  user    User    @relation(fields: [userId], references: [id])
+  company Company @relation(fields: [companyId], references: [id])
+
+  @@unique([userId, companyId])
+  @@map("memberships")
+}
+
+// companyId/role são um snapshot do escopo de empresa ativo no momento da emissão
+// (o usuário pode ter vínculos com várias empresas — o refresh precisa lembrar qual).
+model RefreshToken {
+  id        String    @id @default(cuid())
+  userId    String
+  companyId String?
+  role      Role?
+  tokenHash String    @unique
+  userAgent String?
+  ip        String?
+  expiresAt DateTime
+  revokedAt DateTime?
+  createdAt DateTime  @default(now())
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@map("refresh_tokens")
+}
+
+// Trilha de auditoria transversal — todo módulo de negócio futuro escreve aqui
+// a cada transição de estado relevante (spec seção 3 e 4.12).
+model AuditLog {
+  id          String   @id @default(cuid())
+  companyId   String?
+  actorUserId String?
+  action      String
+  entityType  String
+  entityId    String
+  before      Json?
+  after       Json?
+  ip          String?
+  context     Json?
+  createdAt   DateTime @default(now())
+
+  company Company? @relation(fields: [companyId], references: [id])
+  actor   User?    @relation("AuditActor", fields: [actorUserId], references: [id])
+
+  @@index([companyId])
+  @@index([entityType, entityId])
+  @@map("audit_logs")
 }

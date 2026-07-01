@@ -24,7 +24,11 @@ Plataforma SaaS B2B de gestão de prestadores PJ — ciclo completo de execuçã
 
 Monorepo pnpm workspaces (`pnpm-workspace.yaml`, `apps/*`).
 
-- `apps/api` — NestJS + TypeScript. Bootstrap com `nestjs-pino` (log estruturado), `ValidationPipe` global, filtro global de exceção. Prisma configurado (`prisma/schema.prisma`, `prisma.config.ts`) com datasource PostgreSQL, **sem entidades de negócio ainda**. `GET /health` para liveness/readiness.
+- `apps/api` — NestJS + TypeScript. Bootstrap com `nestjs-pino` (log estruturado), `ValidationPipe` global, filtro global de exceção. `GET /health` para liveness/readiness.
+  - **Prisma**: `PrismaService` (`src/prisma/`) usa driver adapter (`@prisma/adapter-pg`) — Prisma 7 exige isso, não aceita mais `url` no `datasource` do schema. Client gerado no local padrão (`node_modules/@prisma/client`) — **não** customizar `output` no `generator client` (já causou bugs de path `src/` vs `dist/`, ver `docs/decisions.md`).
+  - **Banco**: Cloud SQL real (`fluxowork-dev`, projeto GCP `fluxowork`), não Postgres local. Dev local conecta via Cloud SQL Auth Proxy em `127.0.0.1:5433` — setup completo em `docs/decisions.md`.
+  - **Modelo de dados atual**: `Company`, `User`, `Membership` (vínculo usuário↔empresa↔papel, multi-empresa), `RefreshToken`, `AuditLog` (`AuditService`, infraestrutura transversal usada por todo módulo futuro). Ainda **sem entidades de negócio** (Prestador, Contrato, Ordem de Serviço, etc. — spec seção 4).
+  - **Auth**: Google OAuth 2.0 (`AuthModule`) + JWT de acesso (~15 min, em memória no front-end) + refresh token opaco em cookie `httpOnly` (~30 dias, hash no Postgres, rotacionado). RBAC via `RolesGuard`/`@Roles()` e `RequireCompanyGuard`. Credenciais reais do Google ainda não configuradas (placeholder no `.env` local) — `/auth/google` não funciona de verdade até isso ser feito.
 - `apps/web` — React + Vite + TypeScript. Lint via `oxlint`. Roteamento com `react-router`. Testes com Vitest + Testing Library.
 - `docs/` — `spec.md` (especificação de domínio) e `decisions.md` (ADR curto).
 - `.github/workflows/ci.yml` — lint, typecheck, test, build nos dois apps.
