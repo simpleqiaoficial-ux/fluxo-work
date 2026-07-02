@@ -2,6 +2,15 @@
 
 Log curto de decisões relevantes, mais recente no topo. Cada entrada: o que foi decidido, por quê, e o que fica pendente.
 
+## 2026-07-02 — Incidente: credencial do banco em produção expirada/divergente (não relacionado ao redesign)
+
+Usuário reportou erro ao se cadastrar na URL de produção (ainda na versão antiga, sem o redesign — o deploy da fatia de fundação visual não tinha sido disparado ainda). Diagnóstico: `/health` respondia normalmente (não depende do banco), mas `POST /auth/register` e `POST /auth/login` devolviam 500 genérico pra qualquer tentativa, não só pro e-mail do usuário — isolando o problema como conexão com o banco, não lógica de negócio.
+
+- **Causa raiz** (via `gcloud logging read` nos logs de stdout do Cloud Run, já que o `run.googleapis.com/requests` só tem metadados HTTP, não a exceção em si): `PrismaClientKnownRequestError` código `P1000` — `password authentication failed for user "fluxowork_app"`. A senha salva no secret `fluxowork-api-database-url` (Secret Manager) não batia mais com a senha real do usuário `fluxowork_app` no Cloud SQL. Não ficou claro o que causou a divergência (nenhuma rotação de senha foi feita nesta sessão antes do incidente ser reportado).
+- **Correção**: gerada nova senha aleatória, aplicada no usuário `fluxowork_app` via `gcloud sql users set-password`, nova versão do secret `fluxowork-api-database-url` criada com a connection string atualizada (`gcloud secrets versions add`), e o Cloud Run forçado a subir uma revisão nova pra pegar a versão nova do secret (`gcloud run services update --update-secrets`) — secrets são resolvidos e montados na criação do container, não recarregam sozinhos numa revisão já rodando. Confirmado: `POST /auth/register` voltou a responder `201 Created`.
+- **Sem relação com o trabalho desta sessão**: nem a fatia de design system nem a remoção do Google OAuth mexeram em credenciais de banco. Dev local usa o usuário `postgres` via Cloud SQL Auth Proxy (porta 5433), não o `fluxowork_app` — não foi afetado.
+- **Pendência**: causa raiz da divergência de senha não identificada. Se se repetir, vale investigar rotação automática de credenciais no Cloud SQL ou alguma ação manual anterior no console que não ficou registrada aqui.
+
 ## 2026-07-02 — Fundação visual: design system + shell + reestilização (fatia 1 do redesign enterprise)
 
 Pedido do usuário: transformar a plataforma num SaaS "premium enterprise" (referência Stripe/Linear/Notion/Ramp/Brex, sem copiar), dark mode principal, roxo `#533AFD` só como destaque, design system completo, sidebar inteligente, tabelas de alto nível, e ~15 módulos de negócio novos (Ordens de Serviço, Financeiro, EHS, Auditorias, Documentos, Aprovações, etc.).
