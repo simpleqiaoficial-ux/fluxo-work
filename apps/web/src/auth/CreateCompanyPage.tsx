@@ -1,56 +1,74 @@
 import { useState } from 'react'
-import type { FormEvent } from 'react'
+import { zodResolver } from '@hookform/resolvers/zod'
+import { useForm } from 'react-hook-form'
 import { Navigate } from 'react-router'
-import { Alert } from '../components/Alert'
-import { Button } from '../components/Button'
-import { CenteredPage } from '../components/CenteredPage'
-import { Field, TextInput } from '../components/Field'
+import { z } from 'zod'
+import { Alert } from '@/components/ui/Alert'
+import { Button } from '@/components/ui/Button'
+import { CenteredPage } from '@/components/ui/CenteredPage'
+import { Field } from '@/components/ui/Field'
+import { Input } from '@/components/ui/Input'
 import { useAuth } from './AuthContext'
+
+const createCompanySchema = z.object({
+  legalName: z.string().min(1, 'Informe a razão social'),
+  tradeName: z.string().optional(),
+  cnpj: z.string().min(1, 'Informe o CNPJ'),
+})
+
+type CreateCompanyFormValues = z.infer<typeof createCompanySchema>
 
 export function CreateCompanyPage() {
   const { companyId, createCompany } = useAuth()
-  const [legalName, setLegalName] = useState('')
-  const [tradeName, setTradeName] = useState('')
-  const [cnpj, setCnpj] = useState('')
-  const [submitting, setSubmitting] = useState(false)
-  const [error, setError] = useState<string | null>(null)
+  const [formError, setFormError] = useState<string | null>(null)
+
+  const {
+    register,
+    handleSubmit,
+    formState: { errors, isSubmitting },
+  } = useForm<CreateCompanyFormValues>({
+    resolver: zodResolver(createCompanySchema),
+    mode: 'onBlur',
+  })
 
   if (companyId) {
     return <Navigate to="/" replace />
   }
 
-  const handleSubmit = async (event: FormEvent) => {
-    event.preventDefault()
-    setSubmitting(true)
-    setError(null)
+  const onSubmit = async (values: CreateCompanyFormValues) => {
+    setFormError(null)
     try {
-      await createCompany({ legalName, tradeName: tradeName || undefined, cnpj })
+      await createCompany({
+        legalName: values.legalName,
+        tradeName: values.tradeName || undefined,
+        cnpj: values.cnpj,
+      })
     } catch {
-      setError('Não foi possível criar a empresa. Confira os dados e tente novamente.')
-    } finally {
-      setSubmitting(false)
+      setFormError('Não foi possível criar a empresa. Confira os dados e tente novamente.')
     }
   }
 
   return (
     <CenteredPage>
-      <div className="rounded-lg bg-white p-6 shadow-sm ring-1 ring-slate-200">
-        <h1 className="text-xl font-semibold tracking-tight text-slate-900">Criar empresa</h1>
-        <p className="mt-1 text-sm text-slate-600">
+      <div className="rounded-card border border-slate-200 bg-light-card p-6 dark:border-dark-border dark:bg-dark-surface">
+        <h1 className="text-xl font-semibold tracking-tight text-slate-900 dark:text-slate-100">
+          Criar empresa
+        </h1>
+        <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
           Você ainda não tem vínculo com nenhuma empresa. Crie a sua para continuar.
         </p>
-        <form onSubmit={(event) => void handleSubmit(event)} className="mt-6 space-y-4">
-          {error ? <Alert>{error}</Alert> : null}
-          <Field label="Razão social">
-            <TextInput value={legalName} onChange={(e) => setLegalName(e.target.value)} required />
+        <form onSubmit={(event) => void handleSubmit(onSubmit)(event)} className="mt-6 space-y-4">
+          {formError ? <Alert>{formError}</Alert> : null}
+          <Field label="Razão social" error={errors.legalName?.message}>
+            <Input invalid={Boolean(errors.legalName)} {...register('legalName')} />
           </Field>
           <Field label="Nome fantasia">
-            <TextInput value={tradeName} onChange={(e) => setTradeName(e.target.value)} />
+            <Input {...register('tradeName')} />
           </Field>
-          <Field label="CNPJ">
-            <TextInput value={cnpj} onChange={(e) => setCnpj(e.target.value)} required />
+          <Field label="CNPJ" error={errors.cnpj?.message}>
+            <Input invalid={Boolean(errors.cnpj)} {...register('cnpj')} />
           </Field>
-          <Button type="submit" disabled={submitting} className="w-full">
+          <Button type="submit" loading={isSubmitting} className="w-full">
             Criar empresa
           </Button>
         </form>

@@ -1,68 +1,69 @@
 import { useState } from 'react'
-import type { FormEvent } from 'react'
+import { zodResolver } from '@hookform/resolvers/zod'
+import { useForm } from 'react-hook-form'
 import { Link, useNavigate } from 'react-router'
-import { Alert } from '../components/Alert'
-import { Button } from '../components/Button'
-import { CenteredPage } from '../components/CenteredPage'
-import { Field, TextInput } from '../components/Field'
+import { z } from 'zod'
+import { Alert } from '@/components/ui/Alert'
+import { Button } from '@/components/ui/Button'
+import { CenteredPage } from '@/components/ui/CenteredPage'
+import { Field } from '@/components/ui/Field'
+import { Input } from '@/components/ui/Input'
 import { useAuth } from './AuthContext'
 import { sessionDestination } from './session-destination'
+
+const loginSchema = z.object({
+  email: z.string().email('Informe um e-mail válido'),
+  password: z.string().min(1, 'Informe sua senha'),
+})
+
+type LoginFormValues = z.infer<typeof loginSchema>
 
 export function LoginPage() {
   const { login } = useAuth()
   const navigate = useNavigate()
+  const [formError, setFormError] = useState<string | null>(null)
 
-  const [email, setEmail] = useState('')
-  const [password, setPassword] = useState('')
-  const [submitting, setSubmitting] = useState(false)
-  const [error, setError] = useState<string | null>(null)
+  const {
+    register,
+    handleSubmit,
+    formState: { errors, isSubmitting },
+  } = useForm<LoginFormValues>({
+    resolver: zodResolver(loginSchema),
+    mode: 'onBlur',
+  })
 
-  const handleSubmit = async (event: FormEvent) => {
-    event.preventDefault()
-    setSubmitting(true)
-    setError(null)
+  const onSubmit = async (values: LoginFormValues) => {
+    setFormError(null)
     try {
-      const session = await login(email, password)
+      const session = await login(values.email, values.password)
       await navigate(sessionDestination(session))
     } catch {
-      setError('E-mail ou senha inválidos.')
-    } finally {
-      setSubmitting(false)
+      setFormError('E-mail ou senha inválidos.')
     }
   }
 
   return (
     <CenteredPage>
-      <div className="rounded-lg bg-white p-6 shadow-sm ring-1 ring-slate-200">
-        <h1 className="text-center text-2xl font-semibold tracking-tight text-slate-900">
+      <div className="rounded-card border border-slate-200 bg-light-card p-6 dark:border-dark-border dark:bg-dark-surface">
+        <h1 className="text-center text-2xl font-semibold tracking-tight text-slate-900 dark:text-slate-100">
           FluxoWork
         </h1>
-        <p className="mt-1 text-center text-sm text-slate-600">Entre com sua conta.</p>
-        <form onSubmit={(event) => void handleSubmit(event)} className="mt-6 space-y-4">
-          {error ? <Alert>{error}</Alert> : null}
-          <Field label="E-mail">
-            <TextInput
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              required
-            />
+        <p className="mt-1 text-center text-sm text-slate-500 dark:text-slate-400">Entre com sua conta.</p>
+        <form onSubmit={(event) => void handleSubmit(onSubmit)(event)} className="mt-6 space-y-4">
+          {formError ? <Alert>{formError}</Alert> : null}
+          <Field label="E-mail" error={errors.email?.message}>
+            <Input type="email" invalid={Boolean(errors.email)} {...register('email')} />
           </Field>
-          <Field label="Senha">
-            <TextInput
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              required
-            />
+          <Field label="Senha" error={errors.password?.message}>
+            <Input type="password" invalid={Boolean(errors.password)} {...register('password')} />
           </Field>
-          <Button type="submit" disabled={submitting} className="w-full">
+          <Button type="submit" loading={isSubmitting} className="w-full">
             Entrar
           </Button>
         </form>
-        <p className="mt-4 text-center text-sm text-slate-600">
+        <p className="mt-4 text-center text-sm text-slate-500 dark:text-slate-400">
           Ainda não tem conta?{' '}
-          <Link to="/register" className="font-medium text-indigo-600 hover:text-indigo-500">
+          <Link to="/register" className="font-medium text-primary hover:text-primary-hover">
             Criar conta
           </Link>
         </p>

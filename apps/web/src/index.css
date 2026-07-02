@@ -1,5 +1,112 @@
 @import 'tailwindcss';
+@import '@fontsource/inter/400.css';
+@import '@fontsource/inter/500.css';
+@import '@fontsource/inter/600.css';
+@import '@fontsource/inter/700.css';
 
-body {
-  @apply bg-slate-50 text-slate-900 antialiased;
+@custom-variant dark (&:where(.dark, .dark *));
+
+@theme {
+  --font-sans: 'Inter', ui-sans-serif, system-ui, sans-serif;
+
+  /* Marca — roxo só como cor de destaque, nunca como base da interface */
+  --color-primary: #533afd;
+  --color-primary-hover: #4630d8;
+
+  /* Superfícies dark (tema principal) — grafite, nunca preto puro */
+  --color-dark-bg: #111217;
+  --color-dark-surface: #1a1c24;
+  --color-dark-border: #2b2f3a;
+
+  /* Superfícies light (tema secundário) */
+  --color-light-bg: #f7f8fa;
+  --color-light-card: #ffffff;
+
+  /* Raios: 8px geral, 10px inputs, 12px cards, 16px modais */
+  --radius-base: 8px;
+  --radius-control: 10px;
+  --radius-card: 12px;
+  --radius-modal: 16px;
+
+  /* Transições: poucas, rápidas, elegantes */
+  --default-transition-duration: 180ms;
+  --default-transition-timing-function: ease-out;
+}
+
+@layer base {
+  html {
+    font-family: var(--font-sans);
+  }
+
+  body {
+    @apply bg-light-bg text-slate-900 antialiased dark:bg-dark-bg dark:text-slate-100;
+  }
+}
+
+/* Animações de entrada pra overlays (modal/drawer/dropdown/select/tooltip) —
+   poucas, curtas (150-200ms), sem exagero. Aplicadas só ao montar, já que os
+   primitivos Radix desmontam o conteúdo ao fechar (Portal condicional). */
+@layer components {
+  /* cmdk (CommandPalette) estiliza via atributos, não classes próprias */
+  [cmdk-group-heading] {
+    @apply px-2 py-1.5 text-xs font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500;
+  }
+
+  .fx-fade {
+    animation: fx-fade-in var(--default-transition-duration) var(--default-transition-timing-function);
+  }
+
+  .fx-scale-in {
+    animation: fx-scale-in var(--default-transition-duration) var(--default-transition-timing-function);
+  }
+
+  .fx-slide-in-right {
+    animation: fx-slide-in-right var(--default-transition-duration) var(--default-transition-timing-function);
+  }
+
+  .fx-pop-in {
+    animation: fx-pop-in 150ms var(--default-transition-timing-function);
+  }
+}
+
+@keyframes fx-fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes fx-scale-in {
+  from {
+    opacity: 0;
+    transform: translate(-50%, -48%) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1);
+  }
+}
+
+@keyframes fx-slide-in-right {
+  from {
+    opacity: 0;
+    transform: translateX(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes fx-pop-in {
+  from {
+    opacity: 0;
+    transform: scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
 }
