@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { Navigate } from 'react-router'
+import { Alert } from '../components/Alert'
+import { CenteredPage } from '../components/CenteredPage'
 import { useAuth } from './AuthContext'
 
 export function AuthCallbackPage() {
@@ -35,9 +37,9 @@ export function AuthCallbackPage() {
 
   if (error) {
     return (
-      <main>
-        <p>Não foi possível concluir o login. Tente novamente.</p>
-      </main>
+      <CenteredPage>
+        <Alert>Não foi possível concluir o login. Tente novamente.</Alert>
+      </CenteredPage>
     )
   }
 
@@ -46,8 +48,8 @@ export function AuthCallbackPage() {
   }
 
   return (
-    <main>
-      <p>Entrando...</p>
-    </main>
+    <CenteredPage>
+      <p className="text-center text-sm text-slate-600">Entrando...</p>
+    </CenteredPage>
   )
 }

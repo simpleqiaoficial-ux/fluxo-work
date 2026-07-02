@@ -6,9 +6,9 @@ export function ProtectedRoute() {
 
   if (status === 'loading') {
     return (
-      <main>
-        <p>Carregando...</p>
-      </main>
+      <div className="flex min-h-svh items-center justify-center bg-slate-50">
+        <p className="text-sm text-slate-500">Carregando...</p>
+      </div>
     )
   }
 
