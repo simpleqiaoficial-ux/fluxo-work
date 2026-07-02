@@ -62,11 +62,20 @@ jobs:
 
           EXTRA_FLAGS=()
           if [ "${{ inputs.app }}" = "api" ]; then
+            # --set-env-vars SUBSTITUI todas as env vars da revisão (não faz merge com
+            # o que já estava setado manualmente) — por isso WEB_ORIGIN precisa estar
+            # aqui sempre, senão um deploy da api reseta o CORS pra localhost e quebra
+            # o web em produção silenciosamente (aconteceu em 2026-07-02).
+            WEB_URL=$(gcloud run services describe fluxowork-web --region "${{ secrets.GCP_REGION }}" --project "${{ secrets.GCP_PROJECT_ID }}" --format 'value(status.url)' 2>/dev/null || echo "")
+            ENV_VARS="NODE_ENV=production,JWT_ACCESS_TTL=15m,REFRESH_TOKEN_TTL_DAYS=30"
+            if [ -n "$WEB_URL" ]; then
+              ENV_VARS="$ENV_VARS,WEB_ORIGIN=$WEB_URL"
+            fi
             EXTRA_FLAGS+=(
               --service-account fluxowork-api-runtime@${{ secrets.GCP_PROJECT_ID }}.iam.gserviceaccount.com
               --add-cloudsql-instances "${{ secrets.GCP_PROJECT_ID }}:${{ secrets.GCP_REGION }}:fluxowork-dev"
               --set-secrets "DATABASE_URL=fluxowork-api-database-url:latest,JWT_ACCESS_SECRET=fluxowork-api-jwt-secret:latest"
-              --set-env-vars "NODE_ENV=production,JWT_ACCESS_TTL=15m,REFRESH_TOKEN_TTL_DAYS=30"
+              --set-env-vars "$ENV_VARS"
             )
           elif [ "${{ inputs.app }}" = "web" ]; then
             EXTRA_FLAGS+=(
