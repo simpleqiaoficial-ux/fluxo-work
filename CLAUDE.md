@@ -29,10 +29,10 @@ Monorepo pnpm workspaces (`pnpm-workspace.yaml`, `apps/*`).
   - **Banco**: Cloud SQL real (`fluxowork-dev`, projeto GCP `fluxowork`), não Postgres local. Dev local conecta via Cloud SQL Auth Proxy em `127.0.0.1:5433` — setup completo em `docs/decisions.md`.
   - **Modelo de dados atual**: `Company`, `User`, `Membership` (vínculo usuário↔empresa↔papel, multi-empresa), `RefreshToken`, `AuditLog` (`AuditService`, infraestrutura transversal usada por todo módulo futuro). Ainda **sem entidades de negócio** (Prestador, Contrato, Ordem de Serviço, etc. — spec seção 4).
   - **Auth**: Google OAuth 2.0 (`AuthModule`) + JWT de acesso (~15 min, em memória no front-end) + refresh token opaco em cookie `httpOnly` (~30 dias, hash no Postgres, rotacionado). RBAC via `RolesGuard`/`@Roles()` e `RequireCompanyGuard`. Credenciais reais do Google ainda não configuradas (placeholder no `.env` local) — `/auth/google` não funciona de verdade até isso ser feito.
-- `apps/web` — React + Vite + TypeScript. Lint via `oxlint`. Roteamento com `react-router`. Testes com Vitest + Testing Library.
+- `apps/web` — React + Vite + TypeScript. Lint via `oxlint`. Roteamento com `react-router`. Testes com Vitest + Testing Library. `VITE_API_URL` é embutido no build (SPA estática, sem env var em runtime).
 - `docs/` — `spec.md` (especificação de domínio) e `decisions.md` (ADR curto).
 - `.github/workflows/ci.yml` — lint, typecheck, test, build nos dois apps.
-- `.github/workflows/deploy.yml` — deploy para Cloud Run, disparo manual (`workflow_dispatch`). `apps/api` **já está hospedada** (Workload Identity Federation, Secret Manager, service accounts dedicadas — ver `docs/decisions.md`). `apps/web` ainda não.
+- `.github/workflows/deploy.yml` — deploy para Cloud Run, disparo manual (`workflow_dispatch`). **Os dois apps já estão hospedados** (Workload Identity Federation, Secret Manager, service accounts dedicadas por app — ver `docs/decisions.md` para URLs e nomes de recursos).
 
 Comandos principais (raiz do monorepo):
 

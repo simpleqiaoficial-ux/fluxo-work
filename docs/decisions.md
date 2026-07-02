@@ -2,9 +2,18 @@
 
 Log curto de decisões relevantes, mais recente no topo. Cada entrada: o que foi decidido, por quê, e o que fica pendente.
 
+## 2026-07-01 — Web hospedado no Cloud Run também
+
+`apps/web` está publicamente acessível em **https://fluxowork-web-t4ps6m743a-rj.a.run.app** (servido por `serve` a partir do build estático — mesmo padrão do Dockerfile já existente, sem novidade aí).
+
+- **Service account de runtime dedicada** `fluxowork-web-runtime@fluxowork.iam.gserviceaccount.com`, sem nenhum papel/permissão extra (o serviço só serve arquivos estáticos, não fala com Cloud SQL nem Secret Manager). Precisou existir porque a SA de deploy só tinha permissão de `actAs` sobre a SA de runtime da `api` — sem uma SA dedicada pro `web`, o deploy caía na SA padrão do Compute Engine do projeto, que a SA de deploy não tinha permissão de usar (`iam.serviceaccounts.actAs` negado). Mesmo sem precisar de papéis, uma SA dedicada é mais seguro que depender da SA padrão do projeto (que costuma ter permissões amplas demais).
+- **`VITE_API_URL` é embutido no build**, não é env var de runtime (SPA estática, sem servidor Node por trás rodando a aplicação em si). O `deploy.yml` busca a URL pública atual do serviço `fluxowork-api` via `gcloud run services describe` antes de montar a imagem do `web` (`--build-arg VITE_API_URL=...` no `docker build`).
+- **`WEB_ORIGIN` da API atualizado** para a URL real do `web` (`gcloud run services update fluxowork-api --update-env-vars WEB_ORIGIN=...`) — CORS testado manualmente e confirmado (`Access-Control-Allow-Origin` reflete a origem real do front-end).
+- **Cloud Run também expõe uma URL alternativa** no formato `https://<serviço>-<número-do-projeto>.<região>.run.app` (apareceu no output do `gcloud run services update`, diferente da URL com hash aleatório de `services describe`/`status.url`). As duas apontam pro mesmo serviço; usar sempre `status.url` como fonte de verdade nos scripts (é o que o `deploy.yml` já faz).
+
 ## 2026-07-01 — API hospedada de verdade no Cloud Run
 
-`apps/api` está publicamente acessível em **https://fluxowork-api-t4ps6m743a-rj.a.run.app** (a URL muda se o serviço for recriado — conferir com `gcloud run services describe fluxowork-api --region southamerica-east1 --format 'value(status.url)'`). `apps/web` continua sem deploy — próxima fatia.
+`apps/api` está publicamente acessível em **https://fluxowork-api-t4ps6m743a-rj.a.run.app** (a URL muda se o serviço for recriado — conferir com `gcloud run services describe fluxowork-api --region southamerica-east1 --format 'value(status.url)'`).
 
 - **Infra provisionada no projeto GCP `fluxowork`** (região `southamerica-east1`, mesma do Cloud SQL):
   - Artifact Registry: repositório Docker `fluxowork`.
@@ -50,6 +59,6 @@ Log curto de decisões relevantes, mais recente no topo. Cada entrada: o que foi
 ## Pendências conhecidas
 
 - GitHub CLI (`gh`) e autenticação precisaram ser instalados/feitos manualmente nesta máquina (Windows) — não fazem parte do repositório, é ferramenta local.
-- `apps/api` está hospedada no Cloud Run (ver entrada 2026-07-01 "API hospedada de verdade"); `apps/web` ainda não.
-- Credenciais reais do Google OAuth (Client ID/Secret) pendentes — tanto local quanto produção usam placeholder; só a criação de empresa/RBAC/sessão foram validados manualmente (não o redirect real do Google).
+- `apps/api` e `apps/web` estão hospedados no Cloud Run (ver entradas 2026-07-01 acima).
+- Credenciais reais do Google OAuth (Client ID/Secret) pendentes — tanto local quanto produção usam placeholder; só a criação de empresa/RBAC/sessão foram validados manualmente (não o redirect real do Google). `GOOGLE_OAUTH_CALLBACK_URL` de produção também continua placeholder — precisa virar a URL real da API quando as credenciais forem criadas.
 - Cloud SQL Auth Proxy (`cloud-sql-proxy.exe`) e Google Cloud SDK (`gcloud`) foram instalados nesta máquina fora do repositório — outro desenvolvedor precisa repetir esse setup local (ver seção "Modelo base..." acima) para rodar a API contra o banco real.
