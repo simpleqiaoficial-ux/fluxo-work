@@ -30,7 +30,7 @@ Isso não é estilo — cláusulas e labels com linguagem de vínculo empregatí
 - Back-end: Node.js + NestJS
 - ORM: Prisma
 - Banco de dados: PostgreSQL (Google Cloud SQL)
-- Autenticação: Google OAuth 2.0
+- Autenticação: Google OAuth 2.0 — **desvio em produção**: trocado por e-mail/senha em 2026-07-02, decisão permanente do usuário. Ver `docs/decisions.md` para o motivo e o que mudou; este documento é mantido como fonte de verdade do escopo original, não editado retroativamente para "esconder" a mudança.
 - Storage de arquivos: Google Cloud Storage
 - Hospedagem: Google Cloud Run
 - Cache: Redis (Memorystore)
