@@ -12,7 +12,9 @@ import { ConfigService } from '@nestjs/config';
 import { AuthGuard } from '@nestjs/passport';
 import type { Request, Response } from 'express';
 import { AuthService } from './auth.service';
+import { CurrentUser } from './decorators/current-user.decorator';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
+import type { AccessTokenPayload } from './interfaces/access-token-payload.interface';
 import type { GoogleProfile } from './interfaces/google-profile.interface';
 import { REFRESH_COOKIE_NAME, setRefreshCookie } from './refresh-cookie.util';
 
@@ -38,6 +40,10 @@ export class AuthController {
     return { ip: req.ip, userAgent: req.get('user-agent') ?? undefined };
   }
 
+  private webOrigin() {
+    return this.config.get<string>('WEB_ORIGIN') ?? 'http://localhost:5173';
+  }
+
   @Get('google')
   @UseGuards(AuthGuard('google'))
   googleLogin() {
@@ -46,10 +52,7 @@ export class AuthController {
 
   @Get('google/callback')
   @UseGuards(AuthGuard('google'))
-  async googleCallback(
-    @Req() req: Request,
-    @Res({ passthrough: true }) res: Response,
-  ) {
+  async googleCallback(@Req() req: Request, @Res() res: Response) {
     const profile = req.user as GoogleProfile;
     const { user } = await this.authService.findOrCreateUser(profile);
     const memberships = await this.authService.findActiveMemberships(user.id);
@@ -62,10 +65,25 @@ export class AuthController {
     );
     this.setRefreshCookie(res, tokens);
 
+    // Chega aqui por navegação de página inteira (redirect do Google), não por
+    // fetch — devolver JSON mostraria texto cru na tela. O access token vai só
+    // no fragmento da URL (nunca chega ao servidor/logs); o front-end lê e
+    // decide pra onde ir chamando GET /auth/session.
+    res.redirect(
+      `${this.webOrigin()}/auth/callback#accessToken=${tokens.accessToken}`,
+    );
+  }
+
+  @Get('session')
+  @UseGuards(JwtAuthGuard)
+  async session(@CurrentUser() currentUser: AccessTokenPayload) {
+    const memberships = await this.authService.findActiveMemberships(
+      currentUser.sub,
+    );
+
     return {
-      accessToken: tokens.accessToken,
-      needsCompanySelection: memberships.length > 1,
-      canCreateCompany: memberships.length === 0,
+      companyId: currentUser.companyId,
+      role: currentUser.role,
       memberships: memberships.map((m) => ({
         companyId: m.companyId,
         companyName: m.company.legalName,
