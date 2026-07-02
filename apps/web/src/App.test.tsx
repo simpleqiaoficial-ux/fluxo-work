@@ -13,6 +13,6 @@ describe('App', () => {
         </AuthProvider>
       </MemoryRouter>,
     )
-    expect(screen.getByRole('button', { name: 'Entrar com Google' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Entrar' })).toBeInTheDocument()
   })
 })

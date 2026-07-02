@@ -1,9 +1,14 @@
-import { ForbiddenException, UnauthorizedException } from '@nestjs/common';
+import {
+  ConflictException,
+  ForbiddenException,
+  UnauthorizedException,
+} from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import { AuditService } from '../audit/audit.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuthService } from './auth.service';
+import { hashPassword } from './password.util';
 
 describe('AuthService', () => {
   let service: AuthService;
@@ -11,7 +16,7 @@ describe('AuthService', () => {
     user: {
       findUnique: jest.Mock;
       findUniqueOrThrow: jest.Mock;
-      create: jest.Mock;
+      create: jest.Mock<Promise<unknown>, [{ data: Record<string, unknown> }]>;
     };
     membership: { findUnique: jest.Mock };
     refreshToken: {
@@ -25,7 +30,7 @@ describe('AuthService', () => {
 
   const fakeUser = {
     id: 'user_1',
-    googleId: 'google_1',
+    passwordHash: 'salt:hash',
     email: 'a@b.com',
     name: 'A B',
     avatarUrl: null,
@@ -38,7 +43,10 @@ describe('AuthService', () => {
       user: {
         findUnique: jest.fn(),
         findUniqueOrThrow: jest.fn(),
-        create: jest.fn(),
+        create: jest.fn<
+          Promise<unknown>,
+          [{ data: Record<string, unknown> }]
+        >(),
       },
       membership: { findUnique: jest.fn() },
       refreshToken: {
@@ -68,37 +76,67 @@ describe('AuthService', () => {
     );
   });
 
-  describe('findOrCreateUser', () => {
-    it('returns the existing user without creating a new one', async () => {
+  describe('register', () => {
+    it('rejects when a user with that e-mail already exists', async () => {
       prisma.user.findUnique.mockResolvedValue(fakeUser);
 
-      const result = await service.findOrCreateUser({
-        googleId: 'google_1',
-        email: 'a@b.com',
-        name: 'A B',
-      });
-
-      expect(result.created).toBe(false);
+      await expect(
+        service.register('A B', 'a@b.com', 'password123'),
+      ).rejects.toThrow(ConflictException);
       expect(prisma.user.create).not.toHaveBeenCalled();
     });
 
-    it('creates a new user and records an audit event when none exists', async () => {
+    it('creates a new user with a hashed password and records an audit event', async () => {
       prisma.user.findUnique.mockResolvedValue(null);
       prisma.user.create.mockResolvedValue(fakeUser);
 
-      const result = await service.findOrCreateUser({
-        googleId: 'google_1',
-        email: 'a@b.com',
-        name: 'A B',
-      });
+      const result = await service.register('A B', 'a@b.com', 'password123');
 
-      expect(result.created).toBe(true);
+      expect(result).toEqual(fakeUser);
+      const createCall = prisma.user.create.mock.calls[0][0];
+      expect(createCall.data.passwordHash).not.toBe('password123');
       expect(audit.record).toHaveBeenCalledWith(
         expect.objectContaining({
           action: 'user.created',
           entityId: fakeUser.id,
         }),
       );
+    });
+  });
+
+  describe('validateCredentials', () => {
+    it('rejects when no user exists for the e-mail', async () => {
+      prisma.user.findUnique.mockResolvedValue(null);
+
+      await expect(
+        service.validateCredentials('a@b.com', 'password123'),
+      ).rejects.toThrow(UnauthorizedException);
+    });
+
+    it('rejects when the password does not match', async () => {
+      prisma.user.findUnique.mockResolvedValue({
+        ...fakeUser,
+        passwordHash: await hashPassword('correct-password'),
+      });
+
+      await expect(
+        service.validateCredentials('a@b.com', 'wrong-password'),
+      ).rejects.toThrow(UnauthorizedException);
+    });
+
+    it('returns the user when the password matches', async () => {
+      const stored = {
+        ...fakeUser,
+        passwordHash: await hashPassword('correct-password'),
+      };
+      prisma.user.findUnique.mockResolvedValue(stored);
+
+      const result = await service.validateCredentials(
+        'a@b.com',
+        'correct-password',
+      );
+
+      expect(result).toEqual(stored);
     });
   });
 

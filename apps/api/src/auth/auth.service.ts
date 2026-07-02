@@ -1,5 +1,6 @@
 import { randomBytes, createHash } from 'node:crypto';
 import {
+  ConflictException,
   ForbiddenException,
   Injectable,
   UnauthorizedException,
@@ -10,7 +11,7 @@ import type { Membership, User } from '@prisma/client';
 import { AuditService } from '../audit/audit.service';
 import { PrismaService } from '../prisma/prisma.service';
 import type { AccessTokenPayload } from './interfaces/access-token-payload.interface';
-import type { GoogleProfile } from './interfaces/google-profile.interface';
+import { hashPassword, verifyPassword } from './password.util';
 
 export interface TokenPair {
   accessToken: string;
@@ -36,23 +37,15 @@ export class AuthService {
     private readonly audit: AuditService,
   ) {}
 
-  async findOrCreateUser(
-    profile: GoogleProfile,
-  ): Promise<{ user: User; created: boolean }> {
-    const existing = await this.prisma.user.findUnique({
-      where: { googleId: profile.googleId },
-    });
+  async register(name: string, email: string, password: string): Promise<User> {
+    const existing = await this.prisma.user.findUnique({ where: { email } });
     if (existing) {
-      return { user: existing, created: false };
+      throw new ConflictException('Já existe uma conta com este e-mail');
     }
 
+    const passwordHash = await hashPassword(password);
     const user = await this.prisma.user.create({
-      data: {
-        googleId: profile.googleId,
-        email: profile.email,
-        name: profile.name,
-        avatarUrl: profile.avatarUrl,
-      },
+      data: { name, email, passwordHash },
     });
 
     await this.audit.record({
@@ -62,7 +55,15 @@ export class AuthService {
       actorUserId: user.id,
     });
 
-    return { user, created: true };
+    return user;
+  }
+
+  async validateCredentials(email: string, password: string): Promise<User> {
+    const user = await this.prisma.user.findUnique({ where: { email } });
+    if (!user || !(await verifyPassword(password, user.passwordHash))) {
+      throw new UnauthorizedException('E-mail ou senha inválidos');
+    }
+    return user;
   }
 
   findActiveMemberships(userId: string) {

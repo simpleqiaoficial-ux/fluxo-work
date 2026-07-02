@@ -1,7 +1,7 @@
 import { Route, Routes } from 'react-router'
-import { AuthCallbackPage } from './auth/AuthCallbackPage'
 import { CreateCompanyPage } from './auth/CreateCompanyPage'
 import { LoginPage } from './auth/LoginPage'
+import { RegisterPage } from './auth/RegisterPage'
 import { SelectCompanyPage } from './auth/SelectCompanyPage'
 import { AppLayout } from './layout/AppLayout'
 import { DashboardPage } from './layout/DashboardPage'
@@ -14,7 +14,7 @@ function App() {
   return (
     <Routes>
       <Route path="/login" element={<LoginPage />} />
-      <Route path="/auth/callback" element={<AuthCallbackPage />} />
+      <Route path="/register" element={<RegisterPage />} />
       <Route path="/select-company" element={<SelectCompanyPage />} />
       <Route path="/onboarding/create-company" element={<CreateCompanyPage />} />
 

@@ -1,4 +1,5 @@
 import {
+  Body,
   Controller,
   Get,
   Param,
@@ -9,13 +10,14 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { AuthGuard } from '@nestjs/passport';
 import type { Request, Response } from 'express';
-import { AuthService } from './auth.service';
+import type { User } from '@prisma/client';
+import { AuthService, RequestMeta } from './auth.service';
 import { CurrentUser } from './decorators/current-user.decorator';
+import { LoginDto } from './dto/login.dto';
+import { RegisterDto } from './dto/register.dto';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
 import type { AccessTokenPayload } from './interfaces/access-token-payload.interface';
-import type { GoogleProfile } from './interfaces/google-profile.interface';
 import { REFRESH_COOKIE_NAME, setRefreshCookie } from './refresh-cookie.util';
 
 @Controller('auth')
@@ -36,42 +38,69 @@ export class AuthController {
     );
   }
 
-  private requestMeta(req: Request) {
+  private requestMeta(req: Request): RequestMeta {
     return { ip: req.ip, userAgent: req.get('user-agent') ?? undefined };
   }
 
-  private webOrigin() {
-    return this.config.get<string>('WEB_ORIGIN') ?? 'http://localhost:5173';
-  }
-
-  @Get('google')
-  @UseGuards(AuthGuard('google'))
-  googleLogin() {
-    // Passport intercepta e redireciona para o consentimento do Google.
-  }
-
-  @Get('google/callback')
-  @UseGuards(AuthGuard('google'))
-  async googleCallback(@Req() req: Request, @Res() res: Response) {
-    const profile = req.user as GoogleProfile;
-    const { user } = await this.authService.findOrCreateUser(profile);
+  private async issueLoginTokens(user: User, meta: RequestMeta) {
     const memberships = await this.authService.findActiveMemberships(user.id);
-
     const membership = memberships.length === 1 ? memberships[0] : null;
     const tokens = await this.authService.issueTokenPair(
       user,
       membership,
+      meta,
+    );
+
+    return {
+      tokens,
+      body: {
+        accessToken: tokens.accessToken,
+        needsCompanySelection: memberships.length > 1,
+        canCreateCompany: memberships.length === 0,
+        memberships: memberships.map((m) => ({
+          companyId: m.companyId,
+          companyName: m.company.legalName,
+          role: m.role,
+        })),
+      },
+    };
+  }
+
+  @Post('register')
+  async register(
+    @Req() req: Request,
+    @Res({ passthrough: true }) res: Response,
+    @Body() dto: RegisterDto,
+  ) {
+    const user = await this.authService.register(
+      dto.name,
+      dto.email,
+      dto.password,
+    );
+    const { tokens, body } = await this.issueLoginTokens(
+      user,
       this.requestMeta(req),
     );
     this.setRefreshCookie(res, tokens);
+    return body;
+  }
 
-    // Chega aqui por navegação de página inteira (redirect do Google), não por
-    // fetch — devolver JSON mostraria texto cru na tela. O access token vai só
-    // no fragmento da URL (nunca chega ao servidor/logs); o front-end lê e
-    // decide pra onde ir chamando GET /auth/session.
-    res.redirect(
-      `${this.webOrigin()}/auth/callback#accessToken=${tokens.accessToken}`,
+  @Post('login')
+  async login(
+    @Req() req: Request,
+    @Res({ passthrough: true }) res: Response,
+    @Body() dto: LoginDto,
+  ) {
+    const user = await this.authService.validateCredentials(
+      dto.email,
+      dto.password,
     );
+    const { tokens, body } = await this.issueLoginTokens(
+      user,
+      this.requestMeta(req),
+    );
+    this.setRefreshCookie(res, tokens);
+    return body;
   }
 
   @Get('session')

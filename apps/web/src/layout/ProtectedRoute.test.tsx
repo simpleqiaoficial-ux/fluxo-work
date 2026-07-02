@@ -33,11 +33,11 @@ function baseAuthValue(overrides: Partial<AuthContextValue>): AuthContextValue {
     companyId: null,
     role: null,
     memberships: [],
-    login: () => undefined,
+    login: noop,
+    register: noop,
     logout: noop,
     selectCompany: noop,
     createCompany: noop,
-    setAccessTokenFromCallback: noop,
     ...overrides,
   }
 }

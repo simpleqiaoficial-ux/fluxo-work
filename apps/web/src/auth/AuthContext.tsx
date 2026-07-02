@@ -2,8 +2,6 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useState } 
 import type { ReactNode } from 'react'
 import { apiFetch } from '../lib/api'
 
-const API_URL = import.meta.env.VITE_API_URL ?? 'http://localhost:3000'
-
 export interface Membership {
   companyId: string
   companyName: string
@@ -34,11 +32,11 @@ export interface AuthContextValue {
   companyId: string | null
   role: string | null
   memberships: Membership[]
-  login: () => void
+  login: (email: string, password: string) => Promise<SessionResponse>
+  register: (name: string, email: string, password: string) => Promise<SessionResponse>
   logout: () => Promise<void>
   selectCompany: (companyId: string) => Promise<void>
   createCompany: (input: CreateCompanyInput) => Promise<void>
-  setAccessTokenFromCallback: (token: string) => Promise<SessionResponse>
 }
 
 // Exportado (não só via useAuth) pra permitir injetar um valor de teste direto
@@ -75,9 +73,27 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       .catch(() => setStatus('unauthenticated'))
   }, [loadSessionFor])
 
-  const login = useCallback(() => {
-    window.location.href = `${API_URL}/auth/google`
-  }, [])
+  const login = useCallback(
+    async (email: string, password: string) => {
+      const tokens = await apiFetch<TokenResponse>('/auth/login', {
+        method: 'POST',
+        body: { email, password },
+      })
+      return loadSessionFor(tokens.accessToken)
+    },
+    [loadSessionFor],
+  )
+
+  const register = useCallback(
+    async (name: string, email: string, password: string) => {
+      const tokens = await apiFetch<TokenResponse>('/auth/register', {
+        method: 'POST',
+        body: { name, email, password },
+      })
+      return loadSessionFor(tokens.accessToken)
+    },
+    [loadSessionFor],
+  )
 
   const logout = useCallback(async () => {
     await apiFetch('/auth/logout', { method: 'POST' }).catch(() => undefined)
@@ -111,11 +127,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     [accessToken, loadSessionFor],
   )
 
-  const setAccessTokenFromCallback = useCallback(
-    (token: string) => loadSessionFor(token),
-    [loadSessionFor],
-  )
-
   const value = useMemo<AuthContextValue>(
     () => ({
       status,
@@ -124,23 +135,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       role,
       memberships,
       login,
+      register,
       logout,
       selectCompany,
       createCompany,
-      setAccessTokenFromCallback,
     }),
-    [
-      status,
-      accessToken,
-      companyId,
-      role,
-      memberships,
-      login,
-      logout,
-      selectCompany,
-      createCompany,
-      setAccessTokenFromCallback,
-    ],
+    [status, accessToken, companyId, role, memberships, login, register, logout, selectCompany, createCompany],
   )
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>

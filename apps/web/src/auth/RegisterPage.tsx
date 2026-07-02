@@ -8,10 +8,11 @@ import { Field, TextInput } from '../components/Field'
 import { useAuth } from './AuthContext'
 import { sessionDestination } from './session-destination'
 
-export function LoginPage() {
-  const { login } = useAuth()
+export function RegisterPage() {
+  const { register } = useAuth()
   const navigate = useNavigate()
 
+  const [name, setName] = useState('')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [submitting, setSubmitting] = useState(false)
@@ -22,10 +23,10 @@ export function LoginPage() {
     setSubmitting(true)
     setError(null)
     try {
-      const session = await login(email, password)
+      const session = await register(name, email, password)
       await navigate(sessionDestination(session))
     } catch {
-      setError('E-mail ou senha inválidos.')
+      setError('Não foi possível criar a conta. Verifique os dados e tente novamente.')
     } finally {
       setSubmitting(false)
     }
@@ -37,9 +38,18 @@ export function LoginPage() {
         <h1 className="text-center text-2xl font-semibold tracking-tight text-slate-900">
           FluxoWork
         </h1>
-        <p className="mt-1 text-center text-sm text-slate-600">Entre com sua conta.</p>
+        <p className="mt-1 text-center text-sm text-slate-600">Crie sua conta.</p>
         <form onSubmit={(event) => void handleSubmit(event)} className="mt-6 space-y-4">
           {error ? <Alert>{error}</Alert> : null}
+          <Field label="Nome">
+            <TextInput
+              type="text"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              required
+              minLength={2}
+            />
+          </Field>
           <Field label="E-mail">
             <TextInput
               type="email"
@@ -54,16 +64,17 @@ export function LoginPage() {
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               required
+              minLength={8}
             />
           </Field>
           <Button type="submit" disabled={submitting} className="w-full">
-            Entrar
+            Criar conta
           </Button>
         </form>
         <p className="mt-4 text-center text-sm text-slate-600">
-          Ainda não tem conta?{' '}
-          <Link to="/register" className="font-medium text-indigo-600 hover:text-indigo-500">
-            Criar conta
+          Já tem conta?{' '}
+          <Link to="/login" className="font-medium text-indigo-600 hover:text-indigo-500">
+            Entrar
           </Link>
         </p>
       </div>
