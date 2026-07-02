@@ -2,6 +2,19 @@
 
 Log curto de decisões relevantes, mais recente no topo. Cada entrada: o que foi decidido, por quê, e o que fica pendente.
 
+## 2026-07-02 — UI básica: login, seleção/criação de empresa, Prestadores
+
+Primeira UI de verdade no `apps/web`, publicada nas mesmas URLs de sempre. Decisão do usuário: construir a UI agora mesmo sem credenciais reais do Google OAuth ainda (login real continua bloqueado até isso existir).
+
+- **Duas lacunas reais na API, só visíveis testando via navegador** (nunca testadas assim antes, só curl/token forjado):
+  1. `GET /auth/google/callback` devolvia JSON — mas o navegador chega lá por navegação de página inteira (redirect do Google), então o usuário veria texto cru na tela. Agora redireciona pra `` `${WEB_ORIGIN}/auth/callback#accessToken=...` `` (token só no fragmento, nunca vai pro servidor/logs).
+  2. Cookie de refresh usava `SameSite=Lax`, mas `web` e `api` são serviços Cloud Run em domínios `*.run.app` diferentes — cada `*.run.app` é seu próprio "site" pra regra de SameSite (não é subdomínio de um domínio próprio). `Lax` não é enviado em `fetch`/XHR entre sites diferentes, só em navegação de página inteira — o refresh via `fetch` do front-end simplesmente não funcionaria. Agora usa `SameSite=None; Secure` em produção, mantendo `Lax` sem `Secure` em dev local (HTTPS não existe em `localhost`, `Secure` bloquearia o cookie inteiro).
+- **Novo endpoint `GET /auth/session`** (`JwtAuthGuard`, sem exigir empresa) — devolve `companyId`/`role`/`memberships` a partir do token, usado pelo front-end logo após o callback pra decidir pra onde navegar (dashboard, seleção de empresa, ou criação de empresa).
+- **Token de acesso só em memória** (`AuthContext`, React) — nunca em `localStorage`/`sessionStorage`, regra não-negociável do spec. Sessão é restaurada a cada carregamento de página via `POST /auth/refresh` (cookie httpOnly, automático via `credentials: 'include'`).
+- **Sem biblioteca de UI nova** — HTML semântico simples, reaproveitando o `index.css` já existente.
+- **Verificação de ponta a ponta via Playwright headless** (instalado nesta máquina, fora do repositório — `npx playwright install chromium`), navegando com um token forjado no lugar do login Google real: onboarding → dashboard → criar prestador → criar acordo comercial → logout. Screenshots confirmaram renderização correta em cada etapa. Essa é a primeira vez que se usou automação de navegador neste projeto — vale considerar gerar uma skill de projeto (`/run-skill-generator`) se isso for reaproveitado com frequência.
+- **Pendência inalterada**: credenciais reais do Google OAuth — sem elas, o botão "Entrar com Google" redireciona e falha no consentimento do próprio Google (client_id inválido), esperado.
+
 ## 2026-07-02 — Módulo Contratos (geração + versionamento)
 
 `ContractTemplate` + `Contract`, spec 4.3 — depende de `Provider` (módulo anterior).
