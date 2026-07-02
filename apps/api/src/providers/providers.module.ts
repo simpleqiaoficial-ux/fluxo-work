@@ -13,5 +13,6 @@ import { ProvidersService } from './providers.service';
     CommercialAgreementsService,
     { provide: CNPJ_LOOKUP_SERVICE, useClass: StructuralCnpjLookupService },
   ],
+  exports: [ProvidersService],
 })
 export class ProvidersModule {}

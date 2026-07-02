@@ -40,6 +40,23 @@ enum AgreementStatus {
   TERMINATED
 }
 
+enum ContractTemplateStatus {
+  ACTIVE
+  ARCHIVED
+}
+
+enum ContractStatus {
+  DRAFT
+  ACTIVE
+  SUPERSEDED
+  TERMINATED
+}
+
+enum SignatureStatus {
+  PENDING
+  SIGNED
+}
+
 model Company {
   id        String   @id @default(cuid())
   legalName String
@@ -52,6 +69,8 @@ model Company {
   auditLogs            AuditLog[]
   providers            Provider[]
   commercialAgreements CommercialAgreement[]
+  contractTemplates    ContractTemplate[]
+  contracts            Contract[]
 
   @@map("companies")
 }
@@ -155,6 +174,7 @@ model Provider {
 
   company              Company               @relation(fields: [companyId], references: [id])
   commercialAgreements CommercialAgreement[]
+  contracts            Contract[]
 
   @@unique([companyId, cnpj])
   @@map("providers")
@@ -180,4 +200,47 @@ model CommercialAgreement {
 
   @@index([providerId])
   @@map("commercial_agreements")
+}
+
+// Modelo de contrato por tipo de atividade (spec 4.3). activityType é texto livre
+// por enquanto — a entidade Atividade (spec 4.4) ainda não existe.
+model ContractTemplate {
+  id           String                 @id @default(cuid())
+  companyId    String
+  name         String
+  activityType String
+  bodyTemplate String
+  status       ContractTemplateStatus @default(ACTIVE)
+  createdAt    DateTime               @default(now())
+  updatedAt    DateTime               @updatedAt
+
+  company   Company    @relation(fields: [companyId], references: [id])
+  contracts Contract[]
+
+  @@map("contract_templates")
+}
+
+// Histórico de versões de contrato de um prestador — nunca sobrescrito; um novo
+// contrato ACTIVE encerra (SUPERSEDED) o anterior, mesmo padrão de CommercialAgreement.
+// Sem avaliador de risco de vínculo ainda (spec coloca isso na F3) e sem integração
+// real de assinatura (Clicksign) — signatureStatus só guarda o dado.
+model Contract {
+  id              String          @id @default(cuid())
+  companyId       String
+  providerId      String
+  templateId      String?
+  version         Int             @default(1)
+  content         String
+  status          ContractStatus  @default(DRAFT)
+  signatureStatus SignatureStatus @default(PENDING)
+  signedAt        DateTime?
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+
+  company  Company           @relation(fields: [companyId], references: [id])
+  provider Provider          @relation(fields: [providerId], references: [id])
+  template ContractTemplate? @relation(fields: [templateId], references: [id])
+
+  @@index([providerId])
+  @@map("contracts")
 }

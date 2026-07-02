@@ -2,6 +2,17 @@
 
 Log curto de decisões relevantes, mais recente no topo. Cada entrada: o que foi decidido, por quê, e o que fica pendente.
 
+## 2026-07-02 — Módulo Contratos (geração + versionamento)
+
+`ContractTemplate` + `Contract`, spec 4.3 — depende de `Provider` (módulo anterior).
+
+- **Avaliador de risco de vínculo fora desta fatia**: o spec coloca isso na fase F3 (Enterprise), separado da geração básica de contrato (F1/MVP). Decisão do usuário: deixar pra quando chegarmos na F3, em vez de fazer uma versão simplificada por palavras-chave agora.
+- **Assinatura sem integração real**: `signatureStatus`/`signedAt` só guardam o dado — marcar como assinado é uma ação manual (`PATCH .../signature`). Sem Clicksign, sem upload de PDF (Documentos, spec 4.8, também não existe ainda). Nem interface/stub foi criada ainda para assinatura (diferente do padrão usado com CNPJá) — decisão explícita do usuário de não adiantar essa estrutura nesta fatia.
+- **Versionamento reaproveita o padrão de `CommercialAgreement`**: só um `Contract` `ACTIVE` por prestador; gerar um novo marca o anterior `SUPERSEDED` (nunca apaga/sobrescreve) e incrementa `version`. Testado manualmente: segunda geração superou a primeira corretamente.
+- **`activityType` em `ContractTemplate` é texto livre, não FK** — a entidade Atividade (spec 4.4) ainda não existe.
+- **Renderização de template**: substituição de string simples (`{{provider.legalName}}`, `{{company.legalName}}`, `{{agreement.baseRate}}`, etc.), sem biblioteca de template nova. Placeholders que não resolvem (ou resolvem pra um objeto/array não-stringificável) ficam intactos no texto em vez de virar `[object Object]` — achado real ao lidar com `Decimal` do Prisma no valor do acordo (`agreement.baseRate`), que tem `toString()` próprio mas TypeScript não sabia disso sem tratamento explícito.
+- **Bug pego na verificação manual, não nos testes automatizados**: os endpoints aninhados em `/providers/:providerId/contracts/:id` não validavam que o contrato realmente pertencia ao `providerId` da URL — só à empresa (`companyId`). Não era falha de isolamento entre empresas (isso continuava correto), mas a URL "mentia" sobre o que era garantido. Corrigido: `ContractsService.findById`/`updateSignature` agora exigem `providerId` também. Vale o alerta geral: testes unitários com mocks não pegam esse tipo de inconsistência de rota aninhada — só apareceu testando a API de verdade.
+
 ## 2026-07-02 — Módulo Prestadores (primeiro módulo de negócio real)
 
 Primeiro módulo do spec seção 4 a ser implementado — `Provider` (Prestador) + `CommercialAgreement` (Acordo Comercial), escopados a `companyId` como todo o resto.
