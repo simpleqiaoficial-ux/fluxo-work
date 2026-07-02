@@ -8,10 +8,9 @@ name: Deploy to Cloud Run
 # Configurados em 2026-07-01 — ver docs/decisions.md para os nomes de
 # service accounts, pool/provider WIF e secrets do Secret Manager.
 #
-# As flags específicas do `api` (Cloud SQL, secrets, env vars) ficam isoladas
-# no passo abaixo porque o `web` ainda não foi hospedado nesta fatia — ao
-# adicionar o deploy do `web`, criar os equivalentes dele (Secret Manager,
-# runtime SA, etc.) antes de estender este `if`.
+# `web` é uma SPA estática: VITE_API_URL é embutido no build (Vite não lê
+# env var em runtime), por isso o passo de build busca a URL pública atual
+# do serviço `fluxowork-api` no Cloud Run antes de montar a imagem.
 
 on:
   workflow_dispatch:
@@ -47,7 +46,14 @@ jobs:
       - name: Build & push da imagem
         run: |
           IMAGE="${{ secrets.GCP_REGION }}-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/${{ secrets.GCP_ARTIFACT_REPO }}/${{ inputs.app }}:${{ github.sha }}"
-          docker build -f apps/${{ inputs.app }}/Dockerfile -t "$IMAGE" .
+
+          BUILD_ARGS=()
+          if [ "${{ inputs.app }}" = "web" ]; then
+            API_URL=$(gcloud run services describe fluxowork-api --region "${{ secrets.GCP_REGION }}" --project "${{ secrets.GCP_PROJECT_ID }}" --format 'value(status.url)')
+            BUILD_ARGS+=(--build-arg "VITE_API_URL=$API_URL")
+          fi
+
+          docker build -f apps/${{ inputs.app }}/Dockerfile "${BUILD_ARGS[@]}" -t "$IMAGE" .
           docker push "$IMAGE"
 
       - name: Deploy no Cloud Run
