@@ -57,6 +57,15 @@ enum SignatureStatus {
   SIGNED
 }
 
+enum ServiceOrderStatus {
+  PENDING_MANAGER_APPROVAL
+  PENDING_FINANCE_APPROVAL
+  ADJUSTMENT_REQUESTED
+  APPROVED
+  REJECTED
+  CANCELLED
+}
+
 model Company {
   id        String   @id @default(cuid())
   legalName String
@@ -71,6 +80,7 @@ model Company {
   commercialAgreements CommercialAgreement[]
   contractTemplates    ContractTemplate[]
   contracts            Contract[]
+  serviceOrders        ServiceOrder[]
 
   @@map("companies")
 }
@@ -87,6 +97,10 @@ model User {
   memberships   Membership[]
   refreshTokens RefreshToken[]
   auditLogs     AuditLog[]     @relation("AuditActor")
+
+  createdServiceOrders ServiceOrder[] @relation("ServiceOrderCreatedBy")
+  managerDecisions     ServiceOrder[] @relation("ServiceOrderManagerDecision")
+  financeDecisions     ServiceOrder[] @relation("ServiceOrderFinanceDecision")
 
   @@map("users")
 }
@@ -175,6 +189,7 @@ model Provider {
   company              Company               @relation(fields: [companyId], references: [id])
   commercialAgreements CommercialAgreement[]
   contracts            Contract[]
+  serviceOrders        ServiceOrder[]
 
   @@unique([companyId, cnpj])
   @@map("providers")
@@ -195,8 +210,9 @@ model CommercialAgreement {
   createdAt        DateTime        @default(now())
   updatedAt        DateTime        @updatedAt
 
-  company  Company  @relation(fields: [companyId], references: [id])
-  provider Provider @relation(fields: [providerId], references: [id])
+  company       Company        @relation(fields: [companyId], references: [id])
+  provider      Provider       @relation(fields: [providerId], references: [id])
+  serviceOrders ServiceOrder[]
 
   @@index([providerId])
   @@map("commercial_agreements")
@@ -243,4 +259,53 @@ model Contract {
 
   @@index([providerId])
   @@map("contracts")
+}
+
+// Ordem de Serviço (spec 4.5) — núcleo do sistema. Máquina de estados explícita:
+// Supervisor cria -> Gerente aprova/recusa/pede ajuste -> Financeiro aprova/recusa/pede
+// ajuste -> liberada pra faturamento (APPROVED). Todo pedido de ajuste reinicia o ciclo
+// completo (volta pra PENDING_MANAGER_APPROVAL) em vez de permitir edição direta pelo
+// aprovador — mantém o histórico de aprovação íntegro. Toda transição vai pro AuditLog
+// (spec 3/4.12), não existe tabela própria de histórico de status aqui.
+// Valores ficam em campos separados (nunca um "total" único) porque a composição do
+// valor sustenta a tese de autonomia na defesa jurídica contra pejotização — o total é
+// sempre calculado em runtime pelo service, nunca uma coluna própria (evita divergência).
+// Anexar nota fiscal / gerar título financeiro / pagamento (Stark Bank) ficam fora desta
+// fatia — pertencem ao módulo Financeiro (spec 4.9), que consome uma Ordem já APPROVED.
+model ServiceOrder {
+  id                    String             @id @default(cuid())
+  companyId             String
+  providerId            String
+  commercialAgreementId String?
+  description           String
+  status                ServiceOrderStatus @default(PENDING_MANAGER_APPROVAL)
+
+  baseValue      Decimal @db.Decimal(12, 2)
+  bonus          Decimal @default(0) @db.Decimal(12, 2)
+  commission     Decimal @default(0) @db.Decimal(12, 2)
+  additionals    Decimal @default(0) @db.Decimal(12, 2)
+  reimbursements Decimal @default(0) @db.Decimal(12, 2)
+  adjustments    Decimal @default(0) @db.Decimal(12, 2)
+
+  createdByUserId         String
+  managerDecisionByUserId String?
+  managerDecisionAt       DateTime?
+  managerDecisionNote     String?
+  financeDecisionByUserId String?
+  financeDecisionAt       DateTime?
+  financeDecisionNote     String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  company             Company              @relation(fields: [companyId], references: [id])
+  provider            Provider             @relation(fields: [providerId], references: [id])
+  commercialAgreement CommercialAgreement? @relation(fields: [commercialAgreementId], references: [id])
+  createdBy           User                 @relation("ServiceOrderCreatedBy", fields: [createdByUserId], references: [id])
+  managerDecisionBy   User?                @relation("ServiceOrderManagerDecision", fields: [managerDecisionByUserId], references: [id])
+  financeDecisionBy   User?                @relation("ServiceOrderFinanceDecision", fields: [financeDecisionByUserId], references: [id])
+
+  @@index([providerId])
+  @@index([companyId, status])
+  @@map("service_orders")
 }

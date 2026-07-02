@@ -8,6 +8,7 @@ import { ContractsModule } from './contracts/contracts.module';
 import { HealthModule } from './health/health.module';
 import { PrismaModule } from './prisma/prisma.module';
 import { ProvidersModule } from './providers/providers.module';
+import { ServiceOrdersModule } from './service-orders/service-orders.module';
 
 @Module({
   imports: [
@@ -27,6 +28,7 @@ import { ProvidersModule } from './providers/providers.module';
     CompaniesModule,
     ProvidersModule,
     ContractsModule,
+    ServiceOrdersModule,
     HealthModule,
   ],
 })
