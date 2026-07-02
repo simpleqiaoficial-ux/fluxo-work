@@ -3,7 +3,7 @@ import {
   ValidationArguments,
   ValidationOptions,
 } from 'class-validator';
-import { isValidCnpj } from '../utils/cnpj.util';
+import { isValidCnpj } from './cnpj.util';
 
 export function IsCnpj(validationOptions?: ValidationOptions) {
   return function (object: object, propertyName: string) {

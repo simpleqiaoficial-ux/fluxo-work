@@ -23,6 +23,23 @@ enum MembershipStatus {
   REVOKED
 }
 
+enum ProviderStatus {
+  ACTIVE
+  INACTIVE
+}
+
+enum AgreementType {
+  HOURLY
+  FIXED_PER_ACTIVITY
+  MONTHLY
+}
+
+enum AgreementStatus {
+  ACTIVE
+  SUSPENDED
+  TERMINATED
+}
+
 model Company {
   id        String   @id @default(cuid())
   legalName String
@@ -31,8 +48,10 @@ model Company {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  memberships Membership[]
-  auditLogs   AuditLog[]
+  memberships          Membership[]
+  auditLogs            AuditLog[]
+  providers            Provider[]
+  commercialAgreements CommercialAgreement[]
 
   @@map("companies")
 }
@@ -114,4 +133,51 @@ model AuditLog {
   @@index([companyId])
   @@index([entityType, entityId])
   @@map("audit_logs")
+}
+
+// Cadastro PJ do prestador (spec 4.2) — só o cadastro simples + dados de CNPJ.
+// Abertura de MEI / conta PJ digital ficam fora desta fatia (dependem de um
+// parceiro externo ainda não definido pelo spec). Sem vínculo com User/Membership
+// ainda — Prestador aqui é só dado gerenciado pela empresa, não um login.
+model Provider {
+  id          String         @id @default(cuid())
+  companyId   String
+  cnpj        String
+  legalName   String
+  tradeName   String?
+  contactName String
+  cpf         String
+  rg          String?
+  address     Json?
+  status      ProviderStatus @default(ACTIVE)
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+
+  company              Company               @relation(fields: [companyId], references: [id])
+  commercialAgreements CommercialAgreement[]
+
+  @@unique([companyId, cnpj])
+  @@map("providers")
+}
+
+// Histórico de acordos comerciais de um prestador — nunca sobrescrito; um novo
+// acordo ACTIVE encerra (TERMINATED) o anterior em vez de substituí-lo.
+model CommercialAgreement {
+  id               String          @id @default(cuid())
+  companyId        String
+  providerId       String
+  type             AgreementType
+  baseRate         Decimal         @db.Decimal(12, 2)
+  scopeDescription String
+  status           AgreementStatus @default(ACTIVE)
+  startDate        DateTime
+  endDate          DateTime?
+  createdAt        DateTime        @default(now())
+  updatedAt        DateTime        @updatedAt
+
+  company  Company  @relation(fields: [companyId], references: [id])
+  provider Provider @relation(fields: [providerId], references: [id])
+
+  @@index([providerId])
+  @@map("commercial_agreements")
 }

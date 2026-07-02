@@ -1,5 +1,5 @@
 import { IsOptional, IsString, MinLength } from 'class-validator';
-import { IsCnpj } from '../decorators/is-cnpj.decorator';
+import { IsCnpj } from '../../common/is-cnpj.decorator';
 
 export class CreateCompanyDto {
   @IsString()

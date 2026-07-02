@@ -2,6 +2,19 @@
 
 Log curto de decisões relevantes, mais recente no topo. Cada entrada: o que foi decidido, por quê, e o que fica pendente.
 
+## 2026-07-02 — Módulo Prestadores (primeiro módulo de negócio real)
+
+Primeiro módulo do spec seção 4 a ser implementado — `Provider` (Prestador) + `CommercialAgreement` (Acordo Comercial), escopados a `companyId` como todo o resto.
+
+- **Escopo combinado com o usuário**: só cadastro (dados PJ, CPF/RG/endereço) + acordo comercial. Abertura de MEI e conta PJ digital via parceiro (spec 4.2, etapas 2 e 3 do onboarding) ficam de fora — o spec não nomeia esse parceiro, e não está na lista de integrações obrigatórias (CNPJá, PlugNotas, Clicksign, Stark Bank, Resend).
+- **Prestador não tem login ainda**: é um registro de dados gerenciado pela empresa (criado só por `ADMIN`), sem vínculo com `User`/`Membership`. Isso fica pra fatia futura de convite/gestão de membros — criar um Prestador não gera automaticamente um jeito dele entrar no sistema.
+- **CNPJ único por empresa, não globalmente** (`@@unique([companyId, cnpj])` em `Provider`): o mesmo CNPJ real pode ser prestador de tomadores diferentes, cada um com seu próprio registro — reforça o isolamento multi-tenant em vez de criar um cadastro global de CNPJs compartilhado entre empresas.
+- **`address` como campo `Json`**, não colunas separadas — nenhuma integração real (CNPJá, PlugNotas) foi conectada ainda para saber que formato de endereço vai ser exigido; evita comprometer uma estrutura cedo demais.
+- **`CommercialAgreement` é histórico, nunca sobrescrito**: criar um novo acordo `ACTIVE` para um prestador que já tem um em vigor encerra automaticamente o anterior (`TERMINATED`, com evento de auditoria) — mesmo padrão já usado em `Membership`. Testado manualmente: criar dois acordos em sequência confirma que o primeiro vira `TERMINATED` com `endDate` preenchida.
+- **CNPJá isolada atrás de interface** (`src/providers/cnpj-lookup/`, token de DI `CNPJ_LOOKUP_SERVICE`) — sem credencial de sandbox ainda, a implementação (`StructuralCnpjLookupService`) só confirma o checksum (reaproveita `isValidCnpj`), loga um aviso explícito, e marca o resultado como `source: 'structural-only'`. Trocar pela integração real é só trocar a implementação ligada ao token, sem tocar em `ProvidersService`.
+- **Refactor**: `isValidCnpj`/`IsCnpj`, que só existiam em `src/companies/`, foram movidos para `src/common/` — agora `Company` e `Provider` reaproveitam a mesma validação em vez de duplicar.
+- Testado manualmente contra o Cloud SQL real (via proxy local): criação de prestador, CNPJ duplicado (409), CNPJ inválido (400), RBAC (`SUPERVISOR` bloqueado de criar, mas pode listar), e a supersessão de acordo comercial.
+
 ## 2026-07-01 — Web hospedado no Cloud Run também
 
 `apps/web` está publicamente acessível em **https://fluxowork-web-t4ps6m743a-rj.a.run.app** (servido por `serve` a partir do build estático — mesmo padrão do Dockerfile já existente, sem novidade aí).

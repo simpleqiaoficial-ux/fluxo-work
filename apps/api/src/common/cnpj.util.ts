@@ -1,6 +1,6 @@
 // Validação estrutural (dígitos verificadores) apenas — não confirma que o CNPJ existe
 // ou está ativo na Receita Federal. Essa confirmação é responsabilidade da integração
-// com a CNPJá, isolada atrás de uma interface própria em uma fatia futura.
+// com a CNPJá, isolada atrás de uma interface própria (ver src/providers/cnpj-lookup).
 export function isValidCnpj(rawCnpj: string): boolean {
   const cnpj = rawCnpj.replace(/\D/g, '');
 
