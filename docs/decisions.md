@@ -2,6 +2,15 @@
 
 Log curto de decisões relevantes, mais recente no topo. Cada entrada: o que foi decidido, por quê, e o que fica pendente.
 
+## 2026-07-02 — Tailwind CSS + reestilização de todas as telas
+
+Feedback direto do usuário depois de ver a UI da fatia anterior sem estilo nenhum ("está tudo muito feio"). Escolha do usuário entre Tailwind CSS e CSS próprio: **Tailwind CSS v4** (via `@tailwindcss/vite`), pensando em consistência pras muitas telas de formulário/tabela que ainda vêm pela frente, não só nessas.
+
+- Componentes compartilhados criados em `apps/web/src/components/`: `Button`, `Field`/`TextInput`/`Select`, `Card`, `CenteredPage`, `Alert` — reaproveitados em todas as telas existentes. Telas novas devem usar esses em vez de estilizar do zero.
+- Removido `App.css` (resíduo do template do Vite, não era mais importado por ninguém desde a fatia anterior).
+- Verificado de novo de ponta a ponta com o mesmo script Playwright da fatia anterior (mesmo fluxo: onboarding → dashboard → prestador → acordo comercial → logout), confirmando visualmente via screenshot que o novo estilo renderiza corretamente em cada tela.
+- **Pendência**: usuário está criando as credenciais reais do Google OAuth agora (Client ID/Secret) — ainda não recebidas nesta sessão.
+
 ## 2026-07-02 — UI básica: login, seleção/criação de empresa, Prestadores
 
 Primeira UI de verdade no `apps/web`, publicada nas mesmas URLs de sempre. Decisão do usuário: construir a UI agora mesmo sem credenciais reais do Google OAuth ainda (login real continua bloqueado até isso existir).
