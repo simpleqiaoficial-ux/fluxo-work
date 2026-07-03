@@ -111,6 +111,7 @@ export class AuthController {
     );
 
     return {
+      userId: currentUser.sub,
       companyId: currentUser.companyId,
       role: currentUser.role,
       memberships: memberships.map((m) => ({

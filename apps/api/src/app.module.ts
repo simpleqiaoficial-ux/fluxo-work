@@ -6,6 +6,7 @@ import { AuditModule } from './audit/audit.module';
 import { AuthModule } from './auth/auth.module';
 import { CompaniesModule } from './companies/companies.module';
 import { ContractsModule } from './contracts/contracts.module';
+import { FinancialEntriesModule } from './financial-entries/financial-entries.module';
 import { HealthModule } from './health/health.module';
 import { PrismaModule } from './prisma/prisma.module';
 import { ProvidersModule } from './providers/providers.module';
@@ -31,6 +32,7 @@ import { ServiceOrdersModule } from './service-orders/service-orders.module';
     ContractsModule,
     ServiceOrdersModule,
     ApprovalHierarchyModule,
+    FinancialEntriesModule,
     HealthModule,
   ],
 })

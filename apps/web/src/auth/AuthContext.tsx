@@ -9,6 +9,7 @@ export interface Membership {
 }
 
 export interface SessionResponse {
+  userId?: string
   companyId?: string
   role?: string
   memberships: Membership[]
@@ -29,6 +30,7 @@ interface CreateCompanyInput {
 export interface AuthContextValue {
   status: AuthStatus
   accessToken: string | null
+  userId: string | null
   companyId: string | null
   role: string | null
   memberships: Membership[]
@@ -46,12 +48,14 @@ export const AuthContext = createContext<AuthContextValue | null>(null)
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [status, setStatus] = useState<AuthStatus>('loading')
   const [accessToken, setAccessToken] = useState<string | null>(null)
+  const [userId, setUserId] = useState<string | null>(null)
   const [companyId, setCompanyId] = useState<string | null>(null)
   const [role, setRole] = useState<string | null>(null)
   const [memberships, setMemberships] = useState<Membership[]>([])
 
   const applySession = useCallback((token: string, session: SessionResponse) => {
     setAccessToken(token)
+    setUserId(session.userId ?? null)
     setCompanyId(session.companyId ?? null)
     setRole(session.role ?? null)
     setMemberships(session.memberships)
@@ -98,6 +102,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const logout = useCallback(async () => {
     await apiFetch('/auth/logout', { method: 'POST' }).catch(() => undefined)
     setAccessToken(null)
+    setUserId(null)
     setCompanyId(null)
     setRole(null)
     setMemberships([])
@@ -131,6 +136,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     () => ({
       status,
       accessToken,
+      userId,
       companyId,
       role,
       memberships,
@@ -140,7 +146,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       selectCompany,
       createCompany,
     }),
-    [status, accessToken, companyId, role, memberships, login, register, logout, selectCompany, createCompany],
+    [
+      status,
+      accessToken,
+      userId,
+      companyId,
+      role,
+      memberships,
+      login,
+      register,
+      logout,
+      selectCompany,
+      createCompany,
+    ],
   )
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>

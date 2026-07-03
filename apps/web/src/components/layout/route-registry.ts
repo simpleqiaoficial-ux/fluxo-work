@@ -1,4 +1,4 @@
-import { LayoutDashboard, UserPlus, Users } from 'lucide-react'
+import { LayoutDashboard, Receipt, UserPlus, Users } from 'lucide-react'
 import type { ComponentType } from 'react'
 
 export interface RouteRegistryItem {
@@ -15,11 +15,18 @@ export interface RouteRegistryItem {
 export const routeRegistry: RouteRegistryItem[] = [
   { path: '/', label: 'Resumo', group: 'Navegação', icon: LayoutDashboard },
   { path: '/providers', label: 'Prestadores', group: 'Navegação', icon: Users },
+  { path: '/financial-entries', label: 'Lançamentos', group: 'Navegação', icon: Receipt },
   {
     path: '/providers/new',
     label: 'Novo prestador',
     group: 'Ações',
     icon: UserPlus,
     requiresRole: 'ADMIN',
+  },
+  {
+    path: '/financial-entries/new',
+    label: 'Novo lançamento',
+    group: 'Ações',
+    icon: Receipt,
   },
 ]

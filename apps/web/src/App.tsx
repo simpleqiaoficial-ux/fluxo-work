@@ -4,6 +4,9 @@ import { LoginPage } from './auth/LoginPage'
 import { RegisterPage } from './auth/RegisterPage'
 import { SelectCompanyPage } from './auth/SelectCompanyPage'
 import { AppShell } from './components/layout/AppShell'
+import { FinancialEntryCreatePage } from './financial-entries/FinancialEntryCreatePage'
+import { FinancialEntryDetailPage } from './financial-entries/FinancialEntryDetailPage'
+import { FinancialEntriesListPage } from './financial-entries/FinancialEntriesListPage'
 import { DashboardPage } from './layout/DashboardPage'
 import { ProtectedRoute } from './layout/ProtectedRoute'
 import { ProviderCreatePage } from './providers/ProviderCreatePage'
@@ -24,6 +27,9 @@ function App() {
           <Route path="/providers" element={<ProvidersListPage />} />
           <Route path="/providers/new" element={<ProviderCreatePage />} />
           <Route path="/providers/:id" element={<ProviderDetailPage />} />
+          <Route path="/financial-entries" element={<FinancialEntriesListPage />} />
+          <Route path="/financial-entries/new" element={<FinancialEntryCreatePage />} />
+          <Route path="/financial-entries/:id" element={<FinancialEntryDetailPage />} />
         </Route>
       </Route>
     </Routes>

@@ -14,6 +14,7 @@ function renderLoginPage(overrides: Partial<AuthContextValue> = {}) {
   const value: AuthContextValue = {
     status: 'unauthenticated',
     accessToken: null,
+    userId: null,
     companyId: null,
     role: null,
     memberships: [],

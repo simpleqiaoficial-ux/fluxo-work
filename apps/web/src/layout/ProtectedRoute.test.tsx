@@ -30,6 +30,7 @@ function baseAuthValue(overrides: Partial<AuthContextValue>): AuthContextValue {
   return {
     status: 'loading',
     accessToken: null,
+    userId: null,
     companyId: null,
     role: null,
     memberships: [],
