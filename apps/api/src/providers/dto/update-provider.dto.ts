@@ -33,4 +33,8 @@ export class UpdateProviderDto {
   @IsOptional()
   @IsEnum(ProviderStatus)
   status?: ProviderStatus;
+
+  @IsOptional()
+  @IsString()
+  responsibleAssignmentId?: string;
 }

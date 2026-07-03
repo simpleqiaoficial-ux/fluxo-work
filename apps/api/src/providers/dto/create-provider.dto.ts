@@ -35,4 +35,8 @@ export class CreateProviderDto {
   @IsOptional()
   @IsObject()
   address?: Record<string, unknown>;
+
+  @IsOptional()
+  @IsString()
+  responsibleAssignmentId?: string;
 }

@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { LoggerModule } from 'nestjs-pino';
+import { ApprovalHierarchyModule } from './approval-hierarchy/approval-hierarchy.module';
 import { AuditModule } from './audit/audit.module';
 import { AuthModule } from './auth/auth.module';
 import { CompaniesModule } from './companies/companies.module';
@@ -29,6 +30,7 @@ import { ServiceOrdersModule } from './service-orders/service-orders.module';
     ProvidersModule,
     ContractsModule,
     ServiceOrdersModule,
+    ApprovalHierarchyModule,
     HealthModule,
   ],
 })

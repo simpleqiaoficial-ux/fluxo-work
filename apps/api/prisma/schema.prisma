@@ -81,6 +81,8 @@ model Company {
   contractTemplates    ContractTemplate[]
   contracts            Contract[]
   serviceOrders        ServiceOrder[]
+  approvalLevels       ApprovalLevel[]
+  hierarchyAssignments HierarchyAssignment[]
 
   @@map("companies")
 }
@@ -101,6 +103,8 @@ model User {
   createdServiceOrders ServiceOrder[] @relation("ServiceOrderCreatedBy")
   managerDecisions     ServiceOrder[] @relation("ServiceOrderManagerDecision")
   financeDecisions     ServiceOrder[] @relation("ServiceOrderFinanceDecision")
+
+  hierarchyAssignments HierarchyAssignment[]
 
   @@map("users")
 }
@@ -173,23 +177,25 @@ model AuditLog {
 // parceiro externo ainda não definido pelo spec). Sem vínculo com User/Membership
 // ainda — Prestador aqui é só dado gerenciado pela empresa, não um login.
 model Provider {
-  id          String         @id @default(cuid())
-  companyId   String
-  cnpj        String
-  legalName   String
-  tradeName   String?
-  contactName String
-  cpf         String
-  rg          String?
-  address     Json?
-  status      ProviderStatus @default(ACTIVE)
-  createdAt   DateTime       @default(now())
-  updatedAt   DateTime       @updatedAt
+  id                      String         @id @default(cuid())
+  companyId               String
+  cnpj                    String
+  legalName               String
+  tradeName               String?
+  contactName             String
+  cpf                     String
+  rg                      String?
+  address                 Json?
+  status                  ProviderStatus @default(ACTIVE)
+  responsibleAssignmentId String?
+  createdAt               DateTime       @default(now())
+  updatedAt               DateTime       @updatedAt
 
-  company              Company               @relation(fields: [companyId], references: [id])
-  commercialAgreements CommercialAgreement[]
-  contracts            Contract[]
-  serviceOrders        ServiceOrder[]
+  company               Company               @relation(fields: [companyId], references: [id])
+  commercialAgreements  CommercialAgreement[]
+  contracts             Contract[]
+  serviceOrders         ServiceOrder[]
+  responsibleAssignment HierarchyAssignment?  @relation(fields: [responsibleAssignmentId], references: [id])
 
   @@unique([companyId, cnpj])
   @@map("providers")
@@ -308,4 +314,58 @@ model ServiceOrder {
   @@index([providerId])
   @@index([companyId, status])
   @@map("service_orders")
+}
+
+// Define QUAIS níveis existem na cadeia de aprovação de uma empresa (nome livre,
+// definido pelo admin — "Supervisor", "Gerente", "Líder"...). Não diz quem ocupa
+// cada nível nem quem reporta pra quem — isso é o HierarchyAssignment. Sem cargo
+// fixo no código: o número de níveis e os nomes são inteiramente configuráveis.
+model ApprovalLevel {
+  id        String   @id @default(cuid())
+  companyId String
+  name      String
+  order     Int
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  company     Company               @relation(fields: [companyId], references: [id])
+  assignments HierarchyAssignment[]
+
+  @@unique([companyId, order])
+  @@map("approval_levels")
+}
+
+// Árvore de pessoas — cada nó é uma pessoa ocupando um ApprovalLevel, com um
+// parentId apontando pra quem está acima dela na cadeia (nulo = topo, ex.: um
+// Gerente sem superior configurado). Um Provider aponta pro HierarchyAssignment
+// da pessoa imediatamente responsável por ele (Provider.responsibleAssignmentId).
+//
+// Isso dirige DUAS coisas ao mesmo tempo, ambas derivadas subindo/descendo esta
+// mesma árvore, nunca guardadas separadamente:
+//   - Cadeia de aprovação de um lançamento: parte do responsibleAssignment do
+//     Provider e sobe via parentId até o topo; depois disso sempre cai na etapa
+//     fixa Financeiro (Role.FINANCEIRO/ADMIN, acesso global, não é um nível
+//     configurável).
+//   - Visibilidade: uma pessoa enxerga o próprio nó + toda a subárvore abaixo
+//     dela (via children), nunca outros ramos. Financeiro é a única exceção,
+//     com acesso global fixo por Role, não por posição na árvore.
+model HierarchyAssignment {
+  id              String   @id @default(cuid())
+  companyId       String
+  approvalLevelId String
+  userId          String
+  parentId        String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  company       Company               @relation(fields: [companyId], references: [id])
+  approvalLevel ApprovalLevel         @relation(fields: [approvalLevelId], references: [id])
+  user          User                  @relation(fields: [userId], references: [id])
+  parent        HierarchyAssignment?  @relation("HierarchyAssignmentParent", fields: [parentId], references: [id])
+  children      HierarchyAssignment[] @relation("HierarchyAssignmentParent")
+  providers     Provider[]
+
+  @@index([companyId])
+  @@index([parentId])
+  @@map("hierarchy_assignments")
 }

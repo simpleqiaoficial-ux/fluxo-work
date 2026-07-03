@@ -41,6 +41,13 @@ export class ProvidersService {
       );
     }
 
+    if (dto.responsibleAssignmentId) {
+      await this.assertAssignmentBelongsToCompany(
+        companyId,
+        dto.responsibleAssignmentId,
+      );
+    }
+
     const provider = await this.prisma.provider.create({
       data: {
         companyId,
@@ -51,6 +58,7 @@ export class ProvidersService {
         cpf: dto.cpf,
         rg: dto.rg,
         address: dto.address as Prisma.InputJsonValue,
+        responsibleAssignmentId: dto.responsibleAssignmentId,
       },
     });
 
@@ -93,6 +101,13 @@ export class ProvidersService {
   ) {
     const before = await this.findById(companyId, id);
 
+    if (dto.responsibleAssignmentId) {
+      await this.assertAssignmentBelongsToCompany(
+        companyId,
+        dto.responsibleAssignmentId,
+      );
+    }
+
     const provider = await this.prisma.provider.update({
       where: { id },
       data: {
@@ -102,6 +117,7 @@ export class ProvidersService {
         rg: dto.rg,
         address: dto.address as Prisma.InputJsonValue | undefined,
         status: dto.status,
+        responsibleAssignmentId: dto.responsibleAssignmentId,
       },
     });
 
@@ -117,5 +133,19 @@ export class ProvidersService {
     });
 
     return provider;
+  }
+
+  private async assertAssignmentBelongsToCompany(
+    companyId: string,
+    responsibleAssignmentId: string,
+  ) {
+    const assignment = await this.prisma.hierarchyAssignment.findFirst({
+      where: { id: responsibleAssignmentId, companyId },
+    });
+    if (!assignment) {
+      throw new BadRequestException(
+        'Responsável informado não pertence a esta empresa',
+      );
+    }
   }
 }
