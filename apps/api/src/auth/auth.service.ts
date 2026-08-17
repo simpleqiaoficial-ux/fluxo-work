@@ -106,8 +106,6 @@ export class AuthService {
       actorUserId: user.id,
     });
 
-    await this.rateLimiter.reset(rateLimitKey);
-
     return user;
   }
 

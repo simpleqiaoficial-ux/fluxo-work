@@ -129,7 +129,7 @@ describe('AuthService', () => {
       expect(prisma.user.findUnique).not.toHaveBeenCalled();
     });
 
-    it('counts every registration attempt and resets the counter on success', async () => {
+    it('counts every registration attempt, including successful ones, against the per-IP limit', async () => {
       prisma.user.findUnique.mockResolvedValue(null);
       prisma.user.create.mockResolvedValue(fakeUser);
 
@@ -139,7 +139,10 @@ describe('AuthService', () => {
         'register:203.0.113.4',
         expect.any(Object),
       );
-      expect(rateLimiter.reset).toHaveBeenCalledWith('register:203.0.113.4');
+      // Diferente do login, um registro bem-sucedido não pode resetar o
+      // contador: "sucesso" (criar conta) é exatamente o que o limite por IP
+      // existe pra conter (spam de contas), não uma falha a ser perdoada.
+      expect(rateLimiter.reset).not.toHaveBeenCalled();
     });
   });
 
