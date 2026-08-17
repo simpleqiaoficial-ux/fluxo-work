@@ -72,15 +72,14 @@ export class AuthController {
     @Res({ passthrough: true }) res: Response,
     @Body() dto: RegisterDto,
   ) {
+    const meta = this.requestMeta(req);
     const user = await this.authService.register(
       dto.name,
       dto.email,
       dto.password,
+      meta.ip,
     );
-    const { tokens, body } = await this.issueLoginTokens(
-      user,
-      this.requestMeta(req),
-    );
+    const { tokens, body } = await this.issueLoginTokens(user, meta);
     this.setRefreshCookie(res, tokens);
     return body;
   }
@@ -91,14 +90,13 @@ export class AuthController {
     @Res({ passthrough: true }) res: Response,
     @Body() dto: LoginDto,
   ) {
+    const meta = this.requestMeta(req);
     const user = await this.authService.validateCredentials(
       dto.email,
       dto.password,
+      meta.ip,
     );
-    const { tokens, body } = await this.issueLoginTokens(
-      user,
-      this.requestMeta(req),
-    );
+    const { tokens, body } = await this.issueLoginTokens(user, meta);
     this.setRefreshCookie(res, tokens);
     return body;
   }

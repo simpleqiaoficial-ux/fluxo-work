@@ -10,6 +10,10 @@ import { JwtService } from '@nestjs/jwt';
 import type { Membership, User } from '@prisma/client';
 import { AuditService } from '../audit/audit.service';
 import { PrismaService } from '../prisma/prisma.service';
+import {
+  AuthRateLimiterService,
+  RateLimitOptions,
+} from './auth-rate-limiter.service';
 import type { AccessTokenPayload } from './interfaces/access-token-payload.interface';
 import { hashPassword, verifyPassword } from './password.util';
 
@@ -24,8 +28,45 @@ export interface RequestMeta {
   userAgent?: string;
 }
 
+// 5 tentativas em 15 minutos, bloqueia por mais 15 minutos — mesma janela já
+// usada como convenção de rate limiting no projeto irmão (fluwork.br).
+const LOGIN_RATE_LIMIT: RateLimitOptions = {
+  maxAttempts: 5,
+  windowMs: 15 * 60 * 1000,
+  blockMs: 15 * 60 * 1000,
+};
+
+// Limite paralelo por IP, mais folgado — pega força bruta distribuída por
+// várias contas a partir da mesma origem, algo que o limite por e-mail sozinho
+// não enxerga (cada e-mail individualmente fica abaixo do limiar).
+const LOGIN_IP_RATE_LIMIT: RateLimitOptions = {
+  maxAttempts: 20,
+  windowMs: 15 * 60 * 1000,
+  blockMs: 15 * 60 * 1000,
+};
+
+// Registro é mais raro por natureza; limite mais folgado (contra spam de
+// contas), por IP em vez de e-mail (ainda não existe usuário para chavear).
+const REGISTER_RATE_LIMIT: RateLimitOptions = {
+  maxAttempts: 10,
+  windowMs: 60 * 60 * 1000,
+  blockMs: 60 * 60 * 1000,
+};
+
 function hashToken(raw: string): string {
   return createHash('sha256').update(raw).digest('hex');
+}
+
+function loginRateLimitKey(email: string): string {
+  return `login:${email.trim().toLowerCase()}`;
+}
+
+function registerRateLimitKey(ip: string | undefined): string {
+  return `register:${ip ?? 'unknown'}`;
+}
+
+function loginIpRateLimitKey(ip: string): string {
+  return `login-ip:${ip}`;
 }
 
 @Injectable()
@@ -35,9 +76,19 @@ export class AuthService {
     private readonly jwt: JwtService,
     private readonly config: ConfigService,
     private readonly audit: AuditService,
+    private readonly rateLimiter: AuthRateLimiterService,
   ) {}
 
-  async register(name: string, email: string, password: string): Promise<User> {
+  async register(
+    name: string,
+    email: string,
+    password: string,
+    ip?: string,
+  ): Promise<User> {
+    const rateLimitKey = registerRateLimitKey(ip);
+    await this.rateLimiter.assertNotBlocked(rateLimitKey);
+    await this.rateLimiter.registerAttempt(rateLimitKey, REGISTER_RATE_LIMIT);
+
     const existing = await this.prisma.user.findUnique({ where: { email } });
     if (existing) {
       throw new ConflictException('Já existe uma conta com este e-mail');
@@ -55,13 +106,36 @@ export class AuthService {
       actorUserId: user.id,
     });
 
+    await this.rateLimiter.reset(rateLimitKey);
+
     return user;
   }
 
-  async validateCredentials(email: string, password: string): Promise<User> {
+  async validateCredentials(
+    email: string,
+    password: string,
+    ip?: string,
+  ): Promise<User> {
+    const emailKey = loginRateLimitKey(email);
+    const ipKey = ip ? loginIpRateLimitKey(ip) : undefined;
+
+    await this.rateLimiter.assertNotBlocked(emailKey);
+    if (ipKey) {
+      await this.rateLimiter.assertNotBlocked(ipKey);
+    }
+
     const user = await this.prisma.user.findUnique({ where: { email } });
     if (!user || !(await verifyPassword(password, user.passwordHash))) {
+      await this.rateLimiter.registerAttempt(emailKey, LOGIN_RATE_LIMIT);
+      if (ipKey) {
+        await this.rateLimiter.registerAttempt(ipKey, LOGIN_IP_RATE_LIMIT);
+      }
       throw new UnauthorizedException('E-mail ou senha inválidos');
+    }
+
+    await this.rateLimiter.reset(emailKey);
+    if (ipKey) {
+      await this.rateLimiter.reset(ipKey);
     }
     return user;
   }
@@ -128,7 +202,33 @@ export class AuthService {
       where: { tokenHash },
     });
 
-    if (!stored || stored.revokedAt || stored.expiresAt < new Date()) {
+    if (!stored) {
+      throw new UnauthorizedException('Refresh token inválido ou expirado');
+    }
+
+    // Reuso de um refresh token já rotacionado/revogado é o sinal clássico de
+    // token roubado (o dono legítimo já rotacionou; quem apresenta este aqui
+    // de novo não é ele). Em vez de só rejeitar esta tentativa, derruba todas
+    // as sessões ativas do usuário — presume comprometimento.
+    if (stored.revokedAt) {
+      await this.prisma.refreshToken.updateMany({
+        where: { userId: stored.userId, revokedAt: null },
+        data: { revokedAt: new Date() },
+      });
+
+      await this.audit.record({
+        action: 'auth.refresh_token_reuse_detected',
+        entityType: 'User',
+        entityId: stored.userId,
+        actorUserId: stored.userId,
+        companyId: stored.companyId ?? undefined,
+        ip: meta.ip,
+      });
+
+      throw new UnauthorizedException('Refresh token inválido ou expirado');
+    }
+
+    if (stored.expiresAt < new Date()) {
       throw new UnauthorizedException('Refresh token inválido ou expirado');
     }
 

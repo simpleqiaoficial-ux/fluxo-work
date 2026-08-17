@@ -153,6 +153,25 @@ model RefreshToken {
   @@map("refresh_tokens")
 }
 
+// Contador de tentativas de autenticação (login/registro) por chave lógica
+// (ex.: "login:email@empresa.com" ou "register:203.0.113.4"). Persistido no
+// Postgres em vez de memória do processo de propósito: a API roda em Cloud Run
+// com múltiplas instâncias e scale-to-zero, então um contador em memória seria
+// zerado a cada reciclagem de instância e não protegeria nada. Redis está no
+// roadmap (spec seção 2) mas ainda não provisionado — introduzir essa
+// dependência só para isto seria decisão de infra maior do que o escopo desta
+// correção, então o contador reaproveita o banco que já existe.
+model AuthAttempt {
+  id             String    @id @default(cuid())
+  key            String    @unique
+  count          Int       @default(1)
+  firstAttemptAt DateTime  @default(now())
+  blockedUntil   DateTime?
+  updatedAt      DateTime  @updatedAt
+
+  @@map("auth_attempts")
+}
+
 // Trilha de auditoria transversal — todo módulo de negócio futuro escreve aqui
 // a cada transição de estado relevante (spec seção 3 e 4.12).
 model AuditLog {
