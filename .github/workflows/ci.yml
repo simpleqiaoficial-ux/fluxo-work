@@ -17,6 +17,23 @@ jobs:
     strategy:
       matrix:
         app: [api, web]
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: fluxowork_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/fluxowork_test
+      JWT_ACCESS_SECRET: ci-test-secret
     steps:
       - uses: actions/checkout@v4
 
@@ -34,6 +51,10 @@ jobs:
       - name: Prisma generate
         if: matrix.app == 'api'
         run: pnpm --filter api exec prisma generate
+
+      - name: Prisma migrate deploy
+        if: matrix.app == 'api'
+        run: pnpm --filter api exec prisma migrate deploy
 
       - name: Lint
         run: pnpm --filter ${{ matrix.app }} lint
