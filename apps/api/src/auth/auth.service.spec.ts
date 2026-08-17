@@ -7,6 +7,7 @@ import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import { AuditService } from '../audit/audit.service';
 import { PrismaService } from '../prisma/prisma.service';
+import { AuthRateLimiterService } from './auth-rate-limiter.service';
 import { AuthService } from './auth.service';
 import { hashPassword } from './password.util';
 
@@ -23,10 +24,15 @@ describe('AuthService', () => {
       create: jest.Mock<Promise<unknown>, [{ data: Record<string, unknown> }]>;
       findUnique: jest.Mock;
       update: jest.Mock;
-      updateMany: jest.Mock;
+      updateMany: jest.Mock<Promise<unknown>, [Record<string, unknown>]>;
     };
   };
   let audit: { record: jest.Mock };
+  let rateLimiter: {
+    assertNotBlocked: jest.Mock;
+    registerAttempt: jest.Mock;
+    reset: jest.Mock;
+  };
 
   const fakeUser = {
     id: 'user_1',
@@ -56,10 +62,15 @@ describe('AuthService', () => {
         >(),
         findUnique: jest.fn(),
         update: jest.fn(),
-        updateMany: jest.fn(),
+        updateMany: jest.fn<Promise<unknown>, [Record<string, unknown>]>(),
       },
     };
     audit = { record: jest.fn() };
+    rateLimiter = {
+      assertNotBlocked: jest.fn(),
+      registerAttempt: jest.fn(),
+      reset: jest.fn(),
+    };
 
     const jwt = new JwtService({ secret: 'test-secret' });
     const config = new ConfigService({
@@ -73,6 +84,7 @@ describe('AuthService', () => {
       jwt,
       config,
       audit as unknown as AuditService,
+      rateLimiter as unknown as AuthRateLimiterService,
     );
   });
 
@@ -90,7 +102,12 @@ describe('AuthService', () => {
       prisma.user.findUnique.mockResolvedValue(null);
       prisma.user.create.mockResolvedValue(fakeUser);
 
-      const result = await service.register('A B', 'a@b.com', 'password123');
+      const result = await service.register(
+        'A B',
+        'a@b.com',
+        'password123',
+        '203.0.113.4',
+      );
 
       expect(result).toEqual(fakeUser);
       const createCall = prisma.user.create.mock.calls[0][0];
@@ -101,6 +118,31 @@ describe('AuthService', () => {
           entityId: fakeUser.id,
         }),
       );
+    });
+
+    it('rejects before touching the database when the IP is rate-limited', async () => {
+      rateLimiter.assertNotBlocked.mockRejectedValue(new Error('rate limited'));
+
+      await expect(
+        service.register('A B', 'a@b.com', 'password123', '203.0.113.4'),
+      ).rejects.toThrow('rate limited');
+      expect(prisma.user.findUnique).not.toHaveBeenCalled();
+    });
+
+    it('counts every registration attempt, including successful ones, against the per-IP limit', async () => {
+      prisma.user.findUnique.mockResolvedValue(null);
+      prisma.user.create.mockResolvedValue(fakeUser);
+
+      await service.register('A B', 'a@b.com', 'password123', '203.0.113.4');
+
+      expect(rateLimiter.registerAttempt).toHaveBeenCalledWith(
+        'register:203.0.113.4',
+        expect.any(Object),
+      );
+      // Diferente do login, um registro bem-sucedido não pode resetar o
+      // contador: "sucesso" (criar conta) é exatamente o que o limite por IP
+      // existe pra conter (spam de contas), não uma falha a ser perdoada.
+      expect(rateLimiter.reset).not.toHaveBeenCalled();
     });
   });
 
@@ -138,6 +180,66 @@ describe('AuthService', () => {
 
       expect(result).toEqual(stored);
     });
+
+    it('rejects immediately without querying the database when the e-mail is rate-limited', async () => {
+      rateLimiter.assertNotBlocked.mockRejectedValue(new Error('rate limited'));
+
+      await expect(
+        service.validateCredentials('a@b.com', 'password123'),
+      ).rejects.toThrow('rate limited');
+      expect(prisma.user.findUnique).not.toHaveBeenCalled();
+    });
+
+    it('registers a failed attempt on wrong password, keyed by normalized e-mail', async () => {
+      prisma.user.findUnique.mockResolvedValue({
+        ...fakeUser,
+        passwordHash: await hashPassword('correct-password'),
+      });
+
+      await expect(
+        service.validateCredentials('  A@B.com  ', 'wrong-password'),
+      ).rejects.toThrow(UnauthorizedException);
+      expect(rateLimiter.registerAttempt).toHaveBeenCalledWith(
+        'login:a@b.com',
+        expect.any(Object),
+      );
+    });
+
+    it('resets the attempt counter on a successful login', async () => {
+      prisma.user.findUnique.mockResolvedValue({
+        ...fakeUser,
+        passwordHash: await hashPassword('correct-password'),
+      });
+
+      await service.validateCredentials('a@b.com', 'correct-password');
+
+      expect(rateLimiter.reset).toHaveBeenCalledWith('login:a@b.com');
+      expect(rateLimiter.registerAttempt).not.toHaveBeenCalled();
+    });
+
+    it('also tracks a separate counter by IP, to catch guessing spread across many e-mails', async () => {
+      prisma.user.findUnique.mockResolvedValue(null);
+
+      await expect(
+        service.validateCredentials('a@b.com', 'wrong-password', '203.0.113.4'),
+      ).rejects.toThrow(UnauthorizedException);
+
+      expect(rateLimiter.registerAttempt).toHaveBeenCalledWith(
+        'login-ip:203.0.113.4',
+        expect.any(Object),
+      );
+    });
+
+    it('does not touch an IP-scoped counter when no IP is available', async () => {
+      prisma.user.findUnique.mockResolvedValue(null);
+
+      await expect(
+        service.validateCredentials('a@b.com', 'wrong-password'),
+      ).rejects.toThrow(UnauthorizedException);
+
+      expect(rateLimiter.registerAttempt).toHaveBeenCalledTimes(1);
+      expect(rateLimiter.assertNotBlocked).toHaveBeenCalledTimes(1);
+    });
   });
 
   describe('issueTokenPair', () => {
@@ -165,10 +267,43 @@ describe('AuthService', () => {
   });
 
   describe('rotateRefreshToken', () => {
-    it('rejects an unknown or already-revoked token', async () => {
+    it('rejects an unknown token', async () => {
       prisma.refreshToken.findUnique.mockResolvedValue(null);
       await expect(service.rotateRefreshToken('bogus')).rejects.toThrow(
         UnauthorizedException,
+      );
+      expect(prisma.refreshToken.updateMany).not.toHaveBeenCalled();
+    });
+
+    it('detects reuse of an already-revoked token, revokes every active session for that user, and records an audit event', async () => {
+      prisma.refreshToken.findUnique.mockResolvedValue({
+        id: 'rt_1',
+        userId: fakeUser.id,
+        companyId: 'company_1',
+        revokedAt: new Date(),
+        expiresAt: new Date(Date.now() + 100000),
+      });
+
+      await expect(
+        service.rotateRefreshToken('stolen', { ip: '203.0.113.4' }),
+      ).rejects.toThrow(UnauthorizedException);
+
+      const updateManyCall = prisma.refreshToken.updateMany.mock
+        .calls[0][0] as {
+        where: { userId: string; revokedAt: null };
+        data: { revokedAt: Date };
+      };
+      expect(updateManyCall.where).toEqual({
+        userId: fakeUser.id,
+        revokedAt: null,
+      });
+      expect(updateManyCall.data.revokedAt).toBeInstanceOf(Date);
+      expect(audit.record).toHaveBeenCalledWith(
+        expect.objectContaining({
+          action: 'auth.refresh_token_reuse_detected',
+          entityId: fakeUser.id,
+          ip: '203.0.113.4',
+        }),
       );
     });
 
